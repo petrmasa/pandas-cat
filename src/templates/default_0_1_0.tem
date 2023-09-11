@@ -1,0 +1,290 @@
+<html>
+    <head>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+        <title>{{dataset_name}} - your pandas-cat profile report</title>
+		<style>
+
+		.mt > tbody > tr > td:nth-child(2) { text-align: end; }
+		.mt > tbody > tr > td:nth-child(3) { text-align: end; }
+		
+		.row {
+  display: flex;
+}
+
+.column {
+  flex: 50%;
+}
+
+.fr .bar {
+  float:left;
+  color: white;
+  background-color: blue;
+  line-height: 25px;
+  height: 100%;
+  border-radius: 5px;
+  text-align: right;
+  
+  }
+
+.framedcont {
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 5px;  
+  border-color: #e9ecef;
+  }
+
+.table-borderless > tbody > tr > td,
+.table-borderless > tbody > tr > th,
+.table-borderless > tfoot > tr > td,
+.table-borderless > tfoot > tr > th,
+.table-borderless > thead > tr > td,
+.table-borderless > thead > tr > th {
+    border: none;
+}  
+
+{% for item in df_summary['Profiles'] %}
+#var-{{item['Attribute']}}{
+scroll-margin-top: 80px;
+}
+{% endfor %}
+
+  </style>
+    </head>
+    <body>
+ <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4" crossorigin="anonymous"></script>
+<nav class="navbar sticky-top navbar-expand-lg navbar-light bg-light " style="background-color: #e9ecef;">
+
+<div class="container-fluid">
+    <a class="navbar-brand" href="#"><i><b>pandas</b>-cat</i>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</a>
+	<div class="d-flex justify-content-end">
+    <div class="collapse navbar-collapse " id="navbarSupportedContent">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link active" aria-current="page" href="#summary">Dataset summary</a>
+        </li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Variables
+          </a>
+          <ul class="dropdown-menu">
+  {% for item in df_summary['Profiles'] %}
+            <li><a class="dropdown-item" href="#var-{{item['Attribute']}}">{{item['Attribute']}}</a></li>
+  {% endfor %}
+  
+
+          </ul>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#corr">Correlations</a>
+        </li>
+      </ul></div>
+
+    </div>
+  </div>
+</nav>			
+ 
+<div class="container">
+
+<div class="row" id="summary">	
+<h1>  <b>{{dataset_name}}</b> dataset</h1> <br>&nbsp;<br>
+
+{% for item in warning_info %}
+<div class="alert {{item['type']}}" role="alert">
+  {{item['text']}}
+</div>	
+{% endfor %}
+			
+<h1> Dataset summary </h1>
+  <div class="col-4">
+  <p><p>
+    <table class="table"><colgroup><col span="1" style="width: 30%;"><col span="1" style="width: 70%;" ></colgroup><thead></thead><tbody>
+  
+  {% for key in df_summary['overall_table'] %}
+  <tr><th> {{key}} </th><td style="text-align:left;">{{df_summary['overall_table'][key]}}</td></tr>
+  {% endfor %}
+</tbody></table>
+</div>
+<div class="col-8">
+  
+<img src="data:image/svg+xml;base64,{{df_summary['mem_usg_svg']}}" width="60%" align="center"/>  
+</div>
+</div>
+
+<div class="row">
+
+    <table class="table"><colgroup><col span="1" style="width: 15%;"><col span="1" style="width: 5%;" ><col span="1" style="width: 65%;" ><col span="1" style="width: 15%;" ></colgroup><thead></thead><tbody>
+  <tr><th> Attribute </th><th style="text-align:right;"># of categories</th><th style="text-align:center;">Categories</th><th style="text-align:right;">Memory usage</th></tr>
+  {% for item in df_summary['Profiles'] %}
+  <tr><th> {{item['Attribute']}} </th><td style="text-align:left;">{{item['Categories']}}</td><td style="text-align:left;">{{item['Categories_list']}}</td><td style="text-align:left;">{{item['Memory_usage_hr']}}</td></tr>
+  {% endfor %}
+</tbody></table>
+</div>
+
+
+</div>
+<div class="container" id="headline_vars">
+
+  <h1>  The profile of the variables <br>&nbsp;<br></h1>
+  
+</div>  
+{% for dict_item in indi_variables %}
+<div class="container" id="var-{{dict_item['varname']}}">
+<p>
+</div>
+<div class="container framedcont">
+<h2>{{dict_item['varname']}}</h2>
+{% if dict_item['is_ordered'] == true %}
+<span class="badge bg-success">Categorical</span>
+<span class="badge bg-info">Ordered</span>
+{% endif %}
+<div class="container">
+<div class="row">
+  <div class="col-4">
+    <table class="mt table-borderless"><colgroup><col span="1" style="width: 30%;"><col span="1" style="width: 70%;" ></colgroup><thead></thead><tbody>
+  
+  {% for key in dict_item['summary_tbl'] %}
+  <tr><th> {{key}} </th><td style="text-align:left;">{{dict_item['summary_tbl'][key]}}</td></tr>
+  {% endfor %}
+</tbody></table>
+</div>
+
+  <div class="col-8">
+<table class="table mt fr"><colgroup><col span="1" style="width: 10%;"><col span="1" style="width: 10%;"><col span="1" style="width: 10%;"><col span="1" style="width: 5%;"><col span="1" style="width: 10%;">
+<col span="6" style="width: 55%;"></colgroup><thead><tr><th>{{dict_item['varname']}}</th><th style="text-align:right;">Count</th><th style="text-align:right;">Frequency</th><th></th><th style="text-align: right;">{{dict_item['varname']}}</th>
+<th>Frequency</th></tr></thead><tbody>
+{% for dict_inner1 in dict_item['freq_tbl'] %}
+                 <tr><th>{{dict_inner1['name']}}</th><td>{{dict_inner1['count']}}</td><td>{{dict_inner1['pct']}}</td><td></td><th style="text-align:right;">{{dict_inner1['name']}}</th><td><div class="bar" style="width: {{dict_inner1['fmt_width']}};">				 
+{% if dict_inner1['pct_num']<5 %} 
+&nbsp;</div>{{dict_inner1['pct']}}
+{% else %}
+				 {{dict_inner1['pct']}}&nbsp;</div>
+{% endif %}
+</td></tr>
+{% endfor %}
+
+</tbody></table>
+
+</div>
+</div>
+
+
+<ul class="nav nav-tabs" id="myTab{{dict_item['cnt']}}" role="tablist">
+<li class="nav-item" role="presentation">
+    <button class="nav-link active" id="home{{dict_item['cnt']}}-tab" data-bs-toggle="tab" data-bs-target="#home{{dict_item['cnt']}}-tab-pane" type="button" role="tab" aria-controls="home{{dict_item['cnt']}}-tab-pane" aria-selected="true">Home</button>
+  </li>
+<li class="nav-item" role="presentation">
+    <button class="nav-link" id="fullchart{{dict_item['cnt']}}-tab" data-bs-toggle="tab" data-bs-target="#fullchart{{dict_item['cnt']}}-tab-pane" type="button" role="tab" aria-controls="fullchart{{dict_item['cnt']}}-tab-pane" aria-selected="false">Full Chart</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <a class="nav-link" id="minitable{{dict_item['cnt']}}-tab" data-bs-toggle="tab" data-bs-target="#minitable{{dict_item['cnt']}}-tab-pane" type="button" role="tab" aria-controls="minitable{{dict_item['cnt']}}-tab-pane" aria-selected="false">Minitable</a>
+  </li>
+  <li class="nav-item" role="presentation">
+    <a class="nav-link" id="minichart{{dict_item['cnt']}}-tab" data-bs-toggle="tab" data-bs-target="#minichart{{dict_item['cnt']}}-tab-pane" type="button" role="tab" aria-controls="minichart{{dict_item['cnt']}}-tab-pane" aria-selected="false">Minichart</a>
+  </li>
+</ul>
+<div class="tab-content framedcont" id="myTabContent{{dict_item['cnt']}}">
+  <div class="tab-pane fade show active" id="home{{dict_item['cnt']}}-tab-pane" role="tabpanel" aria-labelledby="home{{dict_item['cnt']}}-tab" tabindex="0">
+<div class="container">
+<div class="row">
+  <div class="col-4">
+    <table class="mt table-borderless fa"><colgroup><col span="1" style="width: 30%;"><col span="1" style="width: 70%;" ></colgroup><thead></thead><tbody>
+  <tr><th> Variable </th><td style="text-align:left;">{{dict_item['varname']}}</td></tr>  
+  {% for key in dict_item['summary_tbl'] %}
+  <tr><th> {{key}} </th><td style="text-align:left;">{{dict_item['summary_tbl'][key]}}</td></tr>
+  {% endfor %}
+</tbody></table>
+  </div>
+  </div>
+  </div>
+  </div>
+  <div class="tab-pane fade" id="fullchart{{dict_item['cnt']}}-tab-pane" role="tabpanel" aria-labelledby="fullchart{{dict_item['cnt']}}-tab" tabindex="0"><img src="data:image/svg+xml;base64,{{dict_item['fcont']}}" width="800" height="auto"></img></div>
+  <div class="tab-pane fade" id="minitable{{dict_item['cnt']}}-tab-pane" role="tabpanel" aria-labelledby="minitable{{dict_item['cnt']}}-tab" tabindex="0">
+  <table class="table mt"><colgroup><col span="1" style="width: 33%;"><colgroup><col span="1" style="width: 33%;"><colgroup><col span="1" style="width: 33%;"></colgroup><thead>
+  <tr><th>{{dict_item['varname']}}</th><th style="text-align:right;">Count</th><th style="text-align:right;">Frequency</th></tr></thead><tbody>
+  {% for dict_inner1 in dict_item['freq_tbl'] %}
+  <tr><th>{{dict_inner1['name']}}</th><td>{{dict_inner1['count']}}</td><td>{{dict_inner1['pct']}}</td></tr>  
+  {% endfor %}
+  </tbody></table>
+  </div>
+  <div class="tab-pane fade" id="minichart{{dict_item['cnt']}}-tab-pane" role="tabpanel" aria-labelledby="minichart{{dict_item['cnt']}}-tab" tabindex="0">
+  <table class="fr table-borderless"><colgroup><col span="1" style="width: 10%;"><colgroup><col span="1" style="width: 55%;"></colgroup><thead><tr><th style="text-align: right;">{{dict_item['varname']}}</th><th></th></tr></thead><tbody>
+  {% for dict_inner1 in dict_item['freq_tbl'] %}
+  <tr><th style="text-align:right;">{{dict_inner1['name']}}</th><td style="text-align:left;"><div class="bar" style="width: {{dict_inner1['fmt_width']}};">
+  {% if dict_inner1['pct_num']<5 %} 
+&nbsp;</div>{{dict_inner1['pct']}}
+  {% else %}
+  {{dict_inner1['pct']}}&nbsp;</div>
+  {% endif %}
+  </td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+  </div><br>
+</div>
+</div>
+{% endfor %}
+<p>
+
+
+<div class="container" id="corr">
+<h2>Correlations</h2>
+
+<h3>
+Overall correlations
+</h3>
+<div class="row">
+
+<img src="data:image/svg+xml;base64,{{corr['overall_corr']}}" width="100%" height="auto"></img>
+
+</div>
+
+
+
+
+<br>
+
+<h3>
+Individual correlations
+</h3>
+
+<div class="accordion" id="accordionCorr">
+  {% for var1 in corr['indiv_corr'] %}
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="heading{{var1}}">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{var1}}" aria-expanded="true" aria-controls="collapse{{var1}}">
+		Correlations with {{var1}}
+      </button>
+    </h2>
+    <div id="collapse{{var1}}" class="accordion-collapse collapse" aria-labelledby="heading{{var1}}" data-bs-parent="#accordionCorr{{var1}}">
+      <div class="accordion-body">
+       <div class="accordion" id="accordionCorr{{var1}}">	   
+        {% for key in corr['indiv_corr'][var1]['vars'] %}
+		  <div class="accordion-item">
+			<h2 class="accordion-header" id="heading{{var1}}_{{key}}">
+			  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{var1}}_{{key}}" aria-expanded="true" aria-controls="collapse{{var1}}_{{key}}">
+				{{var1}} x {{key}}<br>
+			  </button>
+			</h2>
+			<div id="collapse{{var1}}_{{key}}" class="accordion-collapse collapse" aria-labelledby="heading{{var1}}_{{key}}" data-bs-parent="#accordionCorr{{var1}}">
+			  <div class="accordion-body">
+		            <img src="data:image/svg+xml;base64,{{corr['indiv_corr'][var1]['vars'][key]}}" width="100%" height="auto"></img>
+			  </div>
+			</div>
+		  </div>
+		
+        <br>
+        {% endfor %}  
+		</div>
+
+      </div>
+    </div>
+  </div>
+{% endfor %}  
+</div>
+
+</div>
+&nbsp;<br>
+&nbsp;<br>
+Created by <i> pandas profiling categorical </i> version <i>{{version_string}}</i>
+    </body>
+</html>
