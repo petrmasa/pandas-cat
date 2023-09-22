@@ -1,0 +1,69 @@
+.scrollbar {
+  overflow: hidden;
+  position: relative;
+
+  &__icon {
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0.2rem;
+    cursor: pointer;
+    color: var(--color-brand-dark);
+    border-radius: 50%;
+    pointer-events: auto;
+
+    &:hover {
+      background-color: var(--color-grey-0);
+    }
+  }
+
+  &__arrow {
+    position: absolute;
+    height: 100%;
+    width: 10rem;
+    top: 0;
+    display: none;
+    align-items: center;
+    padding: 0 1rem;
+    pointer-events: none;
+
+    &--active {
+      display: flex;
+    }
+
+    &--right {
+      right: 0;
+      background: linear-gradient(
+        to left,
+        var(--color-grey-50) 50%,
+        transparent
+      );
+      justify-content: flex-end;
+    }
+
+    &--left {
+      background: linear-gradient(
+        to right,
+        var(--color-grey-50) 50%,
+        transparent
+      );
+    }
+  }
+
+  &__chips {
+    display: flex;
+    gap: 1rem;
+    list-style: none;
+    overflow-x: scroll;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+
+    &--dragging {
+      scroll-behavior: auto;
+    }
+  }
+
+  &__chips::-webkit-scrollbar {
+    display: none;
+  }
+}

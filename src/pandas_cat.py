@@ -5,24 +5,15 @@ import pandas
 import os
 import numpy as np
 import pandas as pd
-import sys
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-from datasize import DataSize
-from pandas import CategoricalDtype
 from pandas.core.dtypes.common import is_categorical_dtype
 
 from jinja2 import Environment, FileSystemLoader
 from cleverminer import cleverminer
 
-import math
-from textwrap import wrap
-
-from sklearn.impute import SimpleImputer
-
 from cleverminer import cleverminer
-import datasize
 import scipy.stats as ss
 
 class pandas_cat:
@@ -33,26 +24,136 @@ class pandas_cat:
     version_string = "0.1.1"
     template_name = "default_0_1_0.tem"
 
-    def __init(self):
+    def __init__(self):
         """
         Initializes a class.
 
         """
     @staticmethod
-    def profile(df:pandas.DataFrame=None,dataset_name:str=None,opts:dict=None):
+    def profile(df:pandas.DataFrame=None,dataset_name:str=None,template:str=None,opts:dict=None):
         """
         Profiles a categorical dataset.
 
         :param df: pandas dataframe to profile
         :param dataset_name: dataset name
+        :param template: 'default' or 'interactive' template for the final report
         :param opts: options
 
         Options inlude:
             * **auto_prepare** - set whether to apply automatic dataframe preparation (default = False)
             * **cat_limit** - limit number of categories to profile (default=20)
+            * **missing_values** - array of additional custom values that should be detected as missing
 
         """
         self = pandas_cat
+
+        # GENERATE INTERACTIVE REPORT
+        if template == 'interactive':
+            # Use default options if they were not specified by user
+            default_options = {'auto_prepare': True, 'cat_limit': 20, 'missing_values': None}
+            options = default_options if opts is None else {**default_options, **opts}
+
+            # Prepare dataset if auto_prepare is on
+            if options['auto_prepare'] is True:
+                print('Progress 1/6: Preparing data...')
+                df = self.handle_missing_values(df, options['missing_values'])
+                df = self.prepare(df)
+
+            print('Progress 2/6: Preparing attribute profiles...')
+
+            # Storage for attribute profiles
+            attribute_profiles = []
+
+            # Iterate over each column in df
+            for column in df.columns:
+                # Count categories
+                categories_counts = df[column].value_counts()
+                # If categories count is over the limit remove attribute
+                if len(categories_counts) > options['cat_limit']:
+                    df.drop(column, axis=1, inplace=True)
+                    continue
+                # Count missing values
+                missing_count = df[column].isnull().sum()
+                # Get RAM usage
+                formated_ram = self._humanbytes(
+                    df.memory_usage(deep=True)[column])
+                # Create profile for the attribute
+                profile = {
+                    'attribute': column,
+                    'categories': categories_counts.index.tolist(),
+                    'counts': categories_counts.values.tolist(),
+                    'percentages': [round((val / (categories_counts.values.sum() + missing_count)) * 100, 2) for val in categories_counts.values.tolist()],
+                    'missing': missing_count,
+                    'ram': formated_ram
+                }
+                # Store profile
+                attribute_profiles.append(profile)
+
+            print('Progress 3/6: Calculating overall correlations...')
+
+            # Storage for correlations
+            correlations_data = {}
+            correlations_data['Overall Correlations'] = []
+
+            for column_one in df.columns:
+                for column_two in df.columns:
+                    confusion_matrix = pd.crosstab(df[column_one], df[column_two])
+                    correlation = round(self._cramers_corrected_stat(confusion_matrix), 3)
+                    entry = {"x": column_one,
+                            "y": column_two, "v": correlation}
+                    correlations_data['Overall Correlations'].append(entry)
+
+            print('Progress 4/6: Calculating individual correlations...')
+
+            # Iterate over each combination of columns
+            for i, column_one in enumerate(df.columns):
+                for j, column_two in enumerate(df.columns):
+                    confusion_matrix = pd.crosstab(
+                        df[column_one], df[column_two])
+                    crosstab_data = confusion_matrix.to_dict(orient='split')
+                    # Iterate over each combination of categories
+                    for k, category_one in enumerate(crosstab_data['index']):
+                        for l, category_two in enumerate(crosstab_data['columns']):
+                            correlation = crosstab_data['data'][k][l]
+                            entry = {"x": category_one,
+                                    "y": category_two, "v": correlation}
+                            key = f"{column_one} x {column_two}"
+                            if key not in correlations_data:
+                                correlations_data[key] = []
+                            correlations_data[key].append(entry)
+
+            print('Progress 5/6: Preparing html report...')
+
+            # Load Jinja2 template
+            env = Environment(loader=FileSystemLoader(f"{os.path.dirname(__file__)}/templates/interactive"))
+            template = env.get_template('interactive.html')
+
+            # Ready input data for the template
+            data = {
+                'title': dataset_name or 'DataFrame',
+                'attribute_profiles': attribute_profiles,
+                'correlations_data': correlations_data,
+                'attribute_count': df.shape[1],
+                'records_count': df.shape[0],
+                'missing_count': df.isnull().sum().sum(),
+                'total_ram': self._humanbytes(df.memory_usage(deep=True).sum())
+            }
+
+            # Render html using the template
+            html = template.render(**data)
+
+            # Write result in the file
+            report_dir = os.path.join(os.getcwd(), 'report')
+            if not os.path.exists(report_dir):
+                os.makedirs(report_dir)
+            filename = os.path.join(report_dir, f'{dataset_name.lower()}.html')
+            with open(filename, 'w') as f:
+                f.write(html)
+
+            print(f'Progress 6/6: Report {dataset_name.lower()}.html finished...')
+            return
+
+        # GENERATE DEFAULT REPORT
         my_df = df
         if not(type(df) == pandas.core.frame.DataFrame):
             print("Cannot profile. Parameter df is not a pandas dataframe.")
@@ -61,6 +162,7 @@ class pandas_cat:
             if "auto_prepare" in opts:
                 if opts.get("auto_prepare") == True or opts.get("auto_prepare") == 1:
                     print("Will auto prepare data...")
+                    my_df = self.handle_missing_values(df, opts['missing_values'])
                     my_df = self.prepare(df=my_df,opts=opts)
                     print("... auto prepare data done.")
         df = my_df
@@ -397,22 +499,15 @@ class pandas_cat:
 
     def _humanbytes(B):
         """Return the given bytes as a human friendly KB, MB, GB, or TB string."""
-        B = float(B)
-        KB = float(1024)
-        MB = float(KB ** 2) # 1,048,576
-        GB = float(KB ** 3) # 1,073,741,824
-        TB = float(KB ** 4) # 1,099,511,627,776
+        power = 2**10
+        n = 0
+        power_labels = {0: 'B', 1: 'KB', 2: 'MB', 3: 'GB', 4: 'TB'}
 
-        if B < KB:
-            return '{0} {1}'.format(B,'Bytes' if 0 == B > 1 else 'Byte')
-        elif KB <= B < MB:
-            return '{0:.2f} KB'.format(B / KB)
-        elif MB <= B < GB:
-            return '{0:.2f} MB'.format(B / MB)
-        elif GB <= B < TB:
-            return '{0:.2f} GB'.format(B / GB)
-        elif TB <= B:
-            return '{0:.2f} TB'.format(B / TB)
+        while B > power:
+            B /= power
+            n += 1
+
+        return f"{B:.2f} {power_labels[n]}"
 
     @staticmethod
     def prepare(df:pandas.DataFrame=None,opts:dict=None):
@@ -438,3 +533,19 @@ class pandas_cat:
             return my_df
         return clm.df
 
+    @staticmethod
+    def handle_missing_values(df, values:list=None):
+        """
+        Replaces missing string values with real missing values.
+
+        :param df: pandas dataframe
+        :param values: array of additional custom values that should be also detected as missing values
+
+        """
+        default_missing_values = ['na', 'n/a', 'nan', 'null', 'none', 'missing', 'undefined']
+        missing_values = default_missing_values if values is None else list(set(default_missing_values + values))
+
+        for column in df.columns:
+            df[column] = df[column].apply(lambda x: np.nan if str(x).lower() in missing_values else x)
+
+        return df

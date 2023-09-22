@@ -1,0 +1,9 @@
+.footer {
+  margin-top: auto;
+
+  &__text {
+    text-align: center;
+    font-size: 1.2rem;
+    color: var(--color-grey-400);
+  }
+}
