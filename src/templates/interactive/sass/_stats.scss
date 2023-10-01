@@ -1,0 +1,108 @@
+.stats {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 1.4rem;
+  row-gap: 0.4rem;
+  padding: 1.4rem;
+
+  @media only screen and (max-width: $bp-medium) {
+    grid-template-columns: 1fr;
+  }
+
+  @media only screen and (max-width: $bp-small) {
+    grid-column: span 2;
+  }
+
+  &__label {
+    align-self: end;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    color: var(--color-grey-500);
+  }
+
+  &__value {
+    font-size: 1.6rem;
+    line-height: 1;
+    font-weight: 500;
+
+    & span {
+      color: var(--color-grey-500);
+      font-size: 1.4rem;
+    }
+
+    @media only screen and (max-width: $bp-smallest) {
+      font-size: 1.5rem;
+    }
+  }
+
+  &__icon {
+    grid-row: 1/-1;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    @media only screen and (max-width: $bp-medium) {
+      display: none;
+    }
+
+    & svg {
+      width: 2.4rem;
+      height: 2.4rem;
+    }
+
+    &--attributes {
+      background-color: var(--color-septenary-light);
+      & {
+        color: var(--color-septenary-dark);
+      }
+    }
+
+    &--records {
+      background-color: var(--color-octonary-light);
+      & {
+        color: var(--color-octonary-dark);
+      }
+    }
+
+    &--ram {
+      background-color: var(--color-sextenary-light);
+      & {
+        color: var(--color-sextenary-dark);
+      }
+    }
+
+    &--missing {
+      background-color: var(--color-quintenary-light);
+      & {
+        color: var(--color-quintenary-dark);
+      }
+    }
+
+    &--categories {
+      background-color: var(--color-secondary-light);
+      & {
+        color: var(--color-secondary-dark);
+      }
+    }
+
+    &--most {
+      background-color: var(--color-quaternary-light);
+      & {
+        color: var(--color-quaternary-dark);
+      }
+    }
+
+    &--least {
+      background-color: var(--color-tertiary-light);
+      & {
+        color: var(--color-tertiary-dark);
+      }
+    }
+  }
+}

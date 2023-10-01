@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en" class="light-mode">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- ICON -->
+    <link
+      rel="icon"
+      href="https://www.gstatic.com/android/keyboard/emojikitchen/20201001/u1f431/u1f431_u1f43c.png"
+      type="image/x-icon"
+    />
+    <!-- FONTS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- CSS -->
+    <style>
+      {% include './css/main.css' %}
+    </style>
+    <!-- JAVASCRIPT -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.1"></script>
+    <script>
+      window.addEventListener('load', () => {
+        const attributeProfiles = {{ attribute_profiles }};
+        const correlationsData = {{ correlations_data }};
+        {% include './js/main.js' %}
+      });
+    </script>
+    <!-- TITLE -->
+    <title>{{title}} | pandas-cat</title>
+  </head>
+  <body>
+    <div class="app">
+      <!-- HEADER -->
+      <header class="header">
+        <h1 class="heading-1">{{title}}</h1>
+        <div class="menu">
+          <button class="btn btn--darkmode">
+            {% include './img/moon.svg' %}
+          </button>
+          <nav class="nav">
+            <a class="btn" id="summary" href="#summary">Summary</a>
+            <a class="btn" id="attributes" href="#attributes">Attributes</a>
+            <a class="btn" id="correlations" href="#correlations"
+              >Correlations</a
+            >
+          </nav>
+        </div>
+      </header>
+      <!-- SUMMARY PAGE -->
+      <section class="page summary">
+        <div class="box stats">
+          <div class="stats__icon stats__icon--attributes">
+            {% include './img/cols.svg' %}
+          </div>
+          <h5 class="stats__label">Attributes</h5>
+          <p class="stats__value stats__value--attributes">
+            {{ attribute_count }}
+          </p>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--records">
+            {% include './img/rows.svg' %}
+          </div>
+          <h5 class="stats__label">Records</h5>
+          <p class="stats__value stats__value--records">{{ records_count }}</p>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--ram">
+            {% include './img/ram.svg' %}
+          </div>
+          <h5 class="stats__label">RAM</h5>
+          <p class="stats__value">{{ total_ram }}</p>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--missing">
+            {% include './img/missing.svg' %}
+          </div>
+          <h5 class="stats__label">Missing values</h5>
+          <p class="stats__value stats__value--miss">
+            {{ missing_count }}
+            <span>
+              ({{ (missing_count / (attribute_count * records_count) * 100) |
+              round(2) }}%)
+            </span>
+          </p>
+        </div>
+        <div class="box box--table">
+          <div class="row row--header">
+            <div class="row__attribute">Attributes</div>
+            <div class="row__count">#</div>
+            <div class="row__categories">Categories</div>
+            <div class="row__missing">Missing</div>
+            <div class="row__ram">RAM</div>
+          </div>
+          {% for profile in attribute_profiles %}
+          <div class="row">
+            <div class="row__attribute">{{profile['attribute']}}</div>
+            <div class="row__count">{{profile['categories']|length}}</div>
+            <div class="row__categories">
+              {% for category in profile['categories'] %}
+              <span>{{category}}</span>
+              {% endfor %}
+            </div>
+            <div class="row__missing">
+              {{'%0.2f'| format(profile['missing'] / records_count *
+              100|float)}} %
+            </div>
+            <div class="row__ram">{{profile['ram']}}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      <!-- ATTRIBUTES PAGE -->
+      <section class="page attributes">
+        <div class="scrollbar scrollable-tabs-container">
+          <div class="scrollbar__arrow scrollbar__arrow--left">
+            {% include './img/left.svg' %}
+          </div>
+          <ul class="scrollbar__chips">
+            {% for profile in attribute_profiles %}
+            <li class="scrollbar__chip">
+              <button class="btn btn--chip btn--attribute">
+                {{profile['attribute']}}
+              </button>
+            </li>
+            {% endfor %}
+          </ul>
+          <div class="scrollbar__arrow scrollbar__arrow--right">
+            {% include './img/right.svg' %}
+          </div>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--categories">
+            {% include './img/categories.svg' %}
+          </div>
+          <h5 class="stats__label">Categories</h5>
+          <p class="stats__value stats__value--categories">n/a</p>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--most">
+            {% include './img/most.svg' %}
+          </div>
+          <h5 class="stats__label">Most Frequent</h5>
+          <p class="stats__value stats__value--most">n/a</p>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--least">
+            {% include './img/least.svg' %}
+          </div>
+          <h5 class="stats__label">Least Frequent</h5>
+          <p class="stats__value stats__value--least">n/a</p>
+        </div>
+        <div class="box stats">
+          <div class="stats__icon stats__icon--missing">
+            {% include './img/missing.svg' %}
+          </div>
+          <h5 class="stats__label">Missing values</h5>
+          <p class="stats__value stats__value--missing">n/a</p>
+        </div>
+        <div class="box box--chart">
+          <div class="settings">
+            <h2 class="heading-2">n/a</h2>
+            <div class="type">
+              <button class="btn btn--icon btn--bar btn--active">
+                {% include './img/bar.svg' %}
+              </button>
+              <button class="btn btn--icon btn--hbar">
+                {% include './img/hbar.svg' %}
+              </button>
+              <button class="btn btn--icon btn--pie">
+                {% include './img/pie.svg' %}
+              </button>
+              <button class="btn btn--icon btn--minitable">
+                {% include './img/table.svg' %}
+              </button>
+            </div>
+            <div class="options">
+              <button class="btn btn--icon btn--percentage" title="percentage">
+                {% include './img/percentage.svg' %}
+              </button>
+              <button class="btn btn--icon btn--log" title="logarithmic scale">
+                {% include './img/log.svg' %}
+              </button>
+              <button
+                class="btn btn--icon btn--donut btn--hidden"
+                title="donut"
+              >
+                {% include './img/donut.svg' %}
+              </button>
+              <button class="btn btn--icon btn--sort" title="sort">
+                {% include './img/sort.svg' %}
+              </button>
+              <button class="btn btn--icon btn--reverse" title="reverse">
+                {% include './img/reverse.svg' %}
+              </button>
+            </div>
+          </div>
+          <div class="graph">
+            <div style="max-width: 900px; max-height: 500px">
+              <canvas
+                class="canvas canvas--attributes"
+                data-attribute="0"
+              ></canvas>
+            </div>
+            <ul class="minitable minitable--hidden"></ul>
+          </div>
+        </div>
+      </section>
+      <!-- CORRELATIONS PAGE -->
+      <section class="page correlations">
+        <div class="selects">
+          <select class="select select--one">
+            <option value="Overall Correlations">Overall Correlations</option>
+            {% for profile in attribute_profiles %}
+            <option value="{{profile['attribute']}}">
+              {{profile['attribute']}}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="divider divider--hidden"> x </span>
+          <select class="select select--two select--hidden">
+            {% for profile in attribute_profiles %}
+            <option value="{{profile['attribute']}}">
+              {{profile['attribute']}}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="box box--chart">
+          <div class="settings">
+            <h2 class="heading-2">Overall Corellations</h2>
+            <div class="help">
+              <button class="btn btn--icon btn--help" title="help">
+                {% include './img/help.svg' %}
+              </button>
+            </div>
+          </div>
+          <div class="graph">
+            <div style="max-width: 900px; max-height: 500px">
+              <canvas
+                class="canvas canvas--correlations"
+                data-correlations="Overall Correlations"
+              ></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- FOOTER -->
+      <footer class="footer">
+        <p class="footer__text">
+          <a href="https://github.com/petrmasa/pandas-cat" target="_blank">
+            Created by pandas-cat v0.1.2
+          </a>
+        </p>
+      </footer>
+      <!-- MODAL WINDOW -->
+      <div class="modal modal--hidden">
+        <button class="modal__close">&times;</button>
+        <h3 class="heading-3">Overall Correlations (Cramer's V)</h3>
+        <p class="modal__text">
+          Cramer's V values range from 0 to 1, with 0 indicating no association
+          and 1 indicating a full association between attributes.
+        </p>
+        <p class="modal__text">
+          Cramer's V is based on a nominal variation of Pearson's Chi-Square
+          Test and is symmetrical.
+        </p>
+        <h3 class="heading-3">Individual Correlations</h3>
+        <p class="modal__text">
+          Individual correlations display relationships or associations between
+          pairs of attributes.
+        </p>
+      </div>
+      <div class="overlay overlay--hidden"></div>
+    </div>
+  </body>
+</html>

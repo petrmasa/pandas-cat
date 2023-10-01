@@ -1,0 +1,56 @@
+.correlations {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-rows: auto auto auto;
+
+  .selects {
+    display: flex;
+    align-items: center;
+  }
+
+  .select {
+    font-size: 1.4rem;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid var(--color-grey-100);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--color-grey-0);
+    font-weight: 500;
+    // box-shadow: var(--shadow-sm);
+
+    &--hidden {
+      display: none;
+    }
+  }
+
+  .divider {
+    margin: 0 1.5rem;
+
+    &--hidden {
+      display: none;
+    }
+  }
+
+  .graph {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .settings {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    user-select: none;
+
+    @media only screen and (max-width: $bp-smallest) {
+      gap: 0.5rem;
+    }
+  }
+
+  .help {
+    @media only screen and (max-width: $bp-small) {
+      display: none;
+    }
+  }
+}

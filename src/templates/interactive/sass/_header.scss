@@ -1,0 +1,33 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 1rem;
+}
+
+.menu {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.btn--darkmode {
+  @media only screen and (max-width: $bp-small) {
+    order: 2;
+  }
+
+  @media only screen and (max-width: $bp-smallest) {
+    display: none;
+  }
+}
+
+.nav {
+  border: 1px solid var(--color-grey-100);
+  background-color: var(--color-grey-0);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--border-radius-sm);
+  padding: 0.4rem;
+  display: flex;
+  gap: 0.4rem;
+}
