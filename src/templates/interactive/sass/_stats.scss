@@ -38,6 +38,10 @@
     }
   }
 
+  &:has(.stats__icon--missing) {
+    cursor: pointer;
+  }
+
   &__icon {
     grid-row: 1/-1;
     aspect-ratio: 1;

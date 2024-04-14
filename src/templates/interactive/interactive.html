@@ -41,7 +41,14 @@
     <div class="app">
       <!-- HEADER -->
       <header class="header">
-        <h1 class="heading-1">{{title}}</h1>
+        <div class="title">
+          <h1 class="heading-1">{{title}}</h1>
+          {% if excluded_attributes %}
+          <button class="btn btn--excluded">
+            {% include './img/error.svg' %}
+          </button>
+          {% endif %}
+        </div>
         <div class="menu">
           <button class="btn btn--darkmode">
             {% include './img/moon.svg' %}
@@ -182,6 +189,9 @@
               <button class="btn btn--icon btn--minitable">
                 {% include './img/table.svg' %}
               </button>
+              <button class="btn btn--icon btn--missings btn--hidden">
+                {% include './img/error.svg' %}
+              </button>
             </div>
             <div class="options">
               <button class="btn btn--icon btn--percentage" title="percentage">
@@ -262,8 +272,57 @@
           </a>
         </p>
       </footer>
-      <!-- MODAL WINDOW -->
-      <div class="modal modal--hidden">
+      <!-- EXCLUDED ATTRIBUTES MODAL WINDOW -->
+      {% if excluded_attributes %}
+      <div class="modal modal--excluded modal--hidden">
+        <button class="modal__close">&times;</button>
+        <h3 class="heading-3 warning">Warning</h3>
+        <p class="modal__text">
+          Some attributes have been removed from profiling because they have too
+          many categories.
+        </p>
+        <p class="modal__text">
+          Note you may increase the limit of allowed categories by setting the
+          parameter cat_limit.
+        </p>
+        <h4 class="heading-4">Excluded Attributes</h4>
+        <ul class="minitable">
+          {% for profile in excluded_attributes %}
+          <li class="minitable__row">
+            <div class="minitable__field">{{profile['attribute']}}</div>
+            <div class="minitable__field warning">
+              {{profile['categories']}} categories
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <!-- MISSING VALUES MODAL WINDOW -->
+      {% if missing_count > 0 %}
+      <div class="modal modal--missings modal--hidden">
+        <button class="modal__close">&times;</button>
+        <h3 class="heading-3 warning">Missing values</h3>
+        <p class="modal__text">
+          Some categories have been detected as missing values.
+        </p>
+        <h4 class="heading-4">Attributes with missing values</h4>
+        <ul class="minitable">
+          {% for profile in attribute_profiles %} {% if profile['detected'] %}
+          <li class="minitable__row">
+            <div class="minitable__field">{{profile['attribute']}}</div>
+            <div class="minitable__tags">
+              {% for missing in profile['detected'] %}
+              <span>{{'Blank values' if missing == '' else missing}}</span>
+              {% endfor %}
+            </div>
+          </li>
+          {% endif %} {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <!-- CORRELATIONS MODAL WINDOW -->
+      <div class="modal modal--correlations modal--hidden">
         <button class="modal__close">&times;</button>
         <h3 class="heading-3">Overall Correlations (Cramer's V)</h3>
         <p class="modal__text">

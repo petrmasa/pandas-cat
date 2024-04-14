@@ -11,10 +11,10 @@ import matplotlib.ticker as mticker
 from pandas.core.dtypes.common import is_categorical_dtype
 
 from jinja2 import Environment, FileSystemLoader
-from cleverminer import cleverminer
 
 from cleverminer import cleverminer
 import scipy.stats as ss
+
 
 class pandas_cat:
     """
@@ -30,7 +30,7 @@ class pandas_cat:
 
         """
     @staticmethod
-    def profile(df:pandas.DataFrame=None,dataset_name:str=None,template:str=None,opts:dict=None):
+    def profile(df: pandas.DataFrame = None, dataset_name: str = None, template: str = None, opts: dict = None):
         """
         Profiles a categorical dataset.
 
@@ -42,27 +42,30 @@ class pandas_cat:
         Options inlude:
             * **auto_prepare** - set whether to apply automatic dataframe preparation (default = False)
             * **cat_limit** - limit number of categories to profile (default=20)
-            * **missing_values** - array of additional custom values that should be detected as missing
-
+            * **na_values** - array of additional custom values that should be detected as missing
+            * **na_ignore** - array of values (from default list) that should not be detected as missings
+            * **keep_default_na** - boolean to completely override the default missing values list 
         """
         self = pandas_cat
 
         # GENERATE INTERACTIVE REPORT
         if template == 'interactive':
             # Use default options if they were not specified by user
-            default_options = {'auto_prepare': True, 'cat_limit': 20, 'missing_values': None}
-            options = default_options if opts is None else {**default_options, **opts}
+            default_options = {'auto_prepare': True,
+                               'cat_limit': 20,
+                               'na_values': None, 'na_ignore': None, "keep_default_na": True}
+            options = default_options if opts is None else {
+                **default_options, **opts}
 
-            # Prepare dataset if auto_prepare is on
-            if options['auto_prepare'] is True:
-                print('Progress 1/6: Preparing data...')
-                df = self.handle_missing_values(df, options['missing_values'])
-                df = self.prepare(df)
+            print('Progress 1/6: Handling missing values...')
+            df, detected_missings, replaced_counts = self.handle_missing_values(
+                df, options['na_values'], options['na_ignore'], options['keep_default_na'])
 
             print('Progress 2/6: Preparing attribute profiles...')
 
             # Storage for attribute profiles
             attribute_profiles = []
+            excluded_attributes = []
 
             # Iterate over each column in df
             for column in df.columns:
@@ -70,10 +73,13 @@ class pandas_cat:
                 categories_counts = df[column].value_counts()
                 # If categories count is over the limit remove attribute
                 if len(categories_counts) > options['cat_limit']:
+                    removed_attribute_profile = {
+                        "attribute": categories_counts.name, "categories": len(categories_counts)}
+                    excluded_attributes.append(removed_attribute_profile)
                     df.drop(column, axis=1, inplace=True)
                     continue
                 # Count missing values
-                missing_count = df[column].isnull().sum()
+                missing_count = df[column].isna().sum()
                 # Get RAM usage
                 formated_ram = self._humanbytes(
                     df.memory_usage(deep=True)[column])
@@ -84,7 +90,9 @@ class pandas_cat:
                     'counts': categories_counts.values.tolist(),
                     'percentages': [round((val / (categories_counts.values.sum() + missing_count)) * 100, 2) for val in categories_counts.values.tolist()],
                     'missing': missing_count,
-                    'ram': formated_ram
+                    'ram': formated_ram,
+                    'detected': detected_missings[column],
+                    'replaced': replaced_counts[column]
                 }
                 # Store profile
                 attribute_profiles.append(profile)
@@ -97,10 +105,12 @@ class pandas_cat:
 
             for column_one in df.columns:
                 for column_two in df.columns:
-                    confusion_matrix = pd.crosstab(df[column_one], df[column_two])
-                    correlation = round(self._cramers_corrected_stat(confusion_matrix), 3)
+                    confusion_matrix = pd.crosstab(
+                        df[column_one], df[column_two])
+                    correlation = round(
+                        self._cramers_corrected_stat(confusion_matrix), 3)
                     entry = {"x": column_one,
-                            "y": column_two, "v": correlation}
+                             "y": column_two, "v": correlation}
                     correlations_data['Overall Correlations'].append(entry)
 
             print('Progress 4/6: Calculating individual correlations...')
@@ -116,7 +126,7 @@ class pandas_cat:
                         for l, category_two in enumerate(crosstab_data['columns']):
                             correlation = crosstab_data['data'][k][l]
                             entry = {"x": category_one,
-                                    "y": category_two, "v": correlation}
+                                     "y": category_two, "v": correlation}
                             key = f"{column_one} x {column_two}"
                             if key not in correlations_data:
                                 correlations_data[key] = []
@@ -125,12 +135,14 @@ class pandas_cat:
             print('Progress 5/6: Preparing html report...')
 
             # Load Jinja2 template
-            env = Environment(loader=FileSystemLoader(f"{os.path.dirname(__file__)}/templates/interactive"))
+            env = Environment(loader=FileSystemLoader(
+                f"{os.path.dirname(__file__)}/templates/interactive"))
             template = env.get_template('interactive.html')
 
             # Ready input data for the template
             data = {
                 'title': dataset_name or 'DataFrame',
+                'excluded_attributes': excluded_attributes,
                 'attribute_profiles': attribute_profiles,
                 'correlations_data': correlations_data,
                 'attribute_count': df.shape[1],
@@ -150,26 +162,41 @@ class pandas_cat:
             with open(filename, 'w') as f:
                 f.write(html)
 
-            print(f'Progress 6/6: Report {dataset_name.lower()}.html finished...')
+            # Prepare dataset if auto_prepare is on
+            if options['auto_prepare'] is True:
+                df = self.prepare(df)
+
+            print(
+                f'Progress 6/6: Report {dataset_name.lower()}.html finished...')
             return
 
         # GENERATE DEFAULT REPORT
         my_df = df
-        if not(type(df) == pandas.core.frame.DataFrame):
+        if not (type(df) == pandas.core.frame.DataFrame):
             print("Cannot profile. Parameter df is not a pandas dataframe.")
             return
+
+        # Use default options if they were not specified by user
+        default_options = {'auto_prepare': True,
+                           'cat_limit': 20,
+                           'na_values': None, 'na_ignore': None, "keep_default_na": True}
+        options = default_options if opts is None else {
+            **default_options, **opts}
+
+        my_df, _, _ = self.handle_missing_values(
+            df, options['na_values'], options['na_ignore'], options['keep_default_na'])
+
         if opts is not None:
             if "auto_prepare" in opts:
                 if opts.get("auto_prepare") == True or opts.get("auto_prepare") == 1:
                     print("Will auto prepare data...")
-                    my_df = self.handle_missing_values(df, opts['missing_values'])
-                    my_df = self.prepare(df=my_df,opts=opts)
+                    my_df = self.prepare(df=my_df, opts=opts)
                     print("... auto prepare data done.")
         df = my_df
 
         warning_info = []
 
-        #check limit on number of categories for each variable
+        # check limit on number of categories for each variable
 
         limit = 20
 
@@ -178,38 +205,46 @@ class pandas_cat:
                 limit = opts.get("cat_limit")
         print(f"Will limit to {limit} categories.")
 
-        to_drop=[]
+        to_drop = []
 
         for var in df.columns:
             dff = df[var]
             lst = dff.unique()
-            cnt=len(lst)
+            cnt = len(lst)
             print(f"...variable {var} has {cnt} categories")
-            if cnt>limit:
+            if cnt > limit:
                 print(f"WARNING: variable {var} has been removed from profiling because it has {cnt} categories, which is over limit {limit}. Note you may increase the limit of allowed categories by setting the parameter cat_limit.")
-                warning_info.append({'type':'alert-warning','text':'WARNING: variable '+var+' has been removed from profiling because it has '+str(cnt)+' categories, which is over the limit of '+str(limit)+' categories.<br> Note you may increase the limit of allowed categories by setting the parameter <i>cat_limit</i>.'})
+                warning_info.append({'type': 'alert-warning', 'text': 'WARNING: variable '+var+' has been removed from profiling because it has '+str(
+                    cnt)+' categories, which is over the limit of '+str(limit)+' categories.<br> Note you may increase the limit of allowed categories by setting the parameter <i>cat_limit</i>.'})
                 to_drop.append(var)
-            if cnt==1 and lst[0]!=lst[0]:
-                print(f"WARNING: variable {var} has been removed from profiling because it has only empty value.")
-                warning_info.append({'type':'alert-warning','text':'WARNING: variable '+var+' has been removed from profiling because it has only empty value.'})
+            if cnt == 1 and lst[0] != lst[0]:
+                print(
+                    f"WARNING: variable {var} has been removed from profiling because it has only empty value.")
+                warning_info.append({'type': 'alert-warning', 'text': 'WARNING: variable ' +
+                                    var+' has been removed from profiling because it has only empty value.'})
                 to_drop.append(var)
-            if cnt==0:
-                print(f"WARNING: variable {var} has been removed from profiling because it has {cnt} categories")
-                warning_info.append({'type':'alert-warning','text':'WARNING: variable '+var+' has been removed from profiling because it has '+str(cnt)+' categories.'})
+            if cnt == 0:
+                print(
+                    f"WARNING: variable {var} has been removed from profiling because it has {cnt} categories")
+                warning_info.append({'type': 'alert-warning', 'text': 'WARNING: variable '+var +
+                                    ' has been removed from profiling because it has '+str(cnt)+' categories.'})
                 to_drop.append(var)
-            if isinstance(var,list) or isinstance(var,tuple):# or isinstance(var,dict):
-                print(f"WARNING: variable {var} has been removed from profiling because it has unsupported type ({type(var)})")
-                warning_info.append({'type':'alert-warning','text':'WARNING: variable '+var+' has been removed from profiling because it has unsupported type ('+type(var)+').'})
+            # or isinstance(var,dict):
+            if isinstance(var, list) or isinstance(var, tuple):
+                print(
+                    f"WARNING: variable {var} has been removed from profiling because it has unsupported type ({type(var)})")
+                warning_info.append({'type': 'alert-warning', 'text': 'WARNING: variable '+var +
+                                    ' has been removed from profiling because it has unsupported type ('+type(var)+').'})
                 to_drop.append(var)
 
-        if len(to_drop)>0:
+        if len(to_drop) > 0:
             print(f"...will drop {to_drop}")
             df = df.drop(columns=to_drop)
 
-        env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)+'/'+'templates'))
-        html_inner =""
-        indi_variables =[]
-
+        env = Environment(loader=FileSystemLoader(
+            os.path.dirname(__file__)+'/'+'templates'))
+        html_inner = ""
+        indi_variables = []
 
         cntordr = 0
 
@@ -218,7 +253,8 @@ class pandas_cat:
         size_str = str(f'{self._humanbytes(size)}')
 
         df_summary = {}
-        df_summary['overall_table'] = {'Records': str(f'{len(df):,}'), 'Columns': str(f'{len(df.columns):,}'), 'Memory usage': size_str}
+        df_summary['overall_table'] = {'Records': str(f'{len(df):,}'), 'Columns': str(
+            f'{len(df.columns):,}'), 'Memory usage': size_str}
 
         varlist = df.columns
 
@@ -237,7 +273,7 @@ class pandas_cat:
             cat_list = ""
             cat_cnt = 0
             for grp_name, grp_rows in dfg:
-                if cat_cnt>0:
+                if cat_cnt > 0:
                     cat_list = cat_list + ", "
                 cat_list = cat_list + str(grp_name)
                 cat_cnt += 1
@@ -254,8 +290,7 @@ class pandas_cat:
 
         df_summary['Profiles'] = summ_vars
 
-
-        #in following code we will not use _humanbytes as we need same unit for all items
+        # in following code we will not use _humanbytes as we need same unit for all items
         unit = "Bytes"
         tot_size = sum(tmp_val_for_chart)
         min_splitter = 3
@@ -280,7 +315,8 @@ class pandas_cat:
 
         tmp_df2 = pd.DataFrame(tmp_val_for_chart2, columns=tmp_name_for_chart)
 
-        tmp_df2.plot(x='Memory usage', kind='bar', stacked=True, title='Memory usage by attribute')
+        tmp_df2.plot(x='Memory usage', kind='bar', stacked=True,
+                     title='Memory usage by attribute')
 
         # reordering the labels
         handles, labels = plt.gca().get_legend_handles_labels()
@@ -291,7 +327,8 @@ class pandas_cat:
 
         # set legend and labels
 
-        plt.legend([handles[i] for i in order], [labels[i] for i in order], bbox_to_anchor=(1, 1), loc=2, borderaxespad=0.)
+        plt.legend([handles[i] for i in order], [labels[i]
+                   for i in order], bbox_to_anchor=(1, 1), loc=2, borderaxespad=0.)
         plt.tight_layout()
         plt.ylabel('Size in ' + unit)
 
@@ -300,17 +337,17 @@ class pandas_cat:
         tmpfile = BytesIO()
         plt.savefig(tmpfile, format='svg')
         encoded = base64.b64encode(tmpfile.getvalue()).decode('utf-8')
-        df_summary['mem_usg_svg'] =  encoded
+        df_summary['mem_usg_svg'] = encoded
 
         print("Preparing summary...done")
         print("Preparing individual profiles...")
-
 
         for i in df.columns:
             df2 = df[[i]]
             cntordr += 1
             for j in df2.columns:
-                fcont = self._plot_histogram(df2, j, sort=False, save=False, rotate=False)
+                fcont = self._plot_histogram(
+                    df2, j, sort=False, save=False, rotate=False)
                 df3 = df2.groupby(j)
 
                 is_ordered = False
@@ -360,29 +397,35 @@ class pandas_cat:
                 summary_tbl['mem_usage'] = size_str
                 missings = df2[j].isna().sum()
                 missings_pct = missings / len(df2) * 100
-                summary += "Missings: " + str(f'{missings:,}') + " (" + str(f'%.2f%%' % missings_pct) + ")<br>"
-                summary_tbl['Missings'] = str(f'{missings:,}') + " (" + str(f'%.2f%%' % missings_pct) + ")"
-                d = {'varname': j, 'is_ordered': is_ordered, 'freq_table': None, 'freq_chart': None, 'fname': fn, 'fcont':fcont,
+                summary += "Missings: " + \
+                    str(f'{missings:,}') + \
+                    " (" + str(f'%.2f%%' % missings_pct) + ")<br>"
+                summary_tbl['Missings'] = str(
+                    f'{missings:,}') + " (" + str(f'%.2f%%' % missings_pct) + ")"
+                d = {'varname': j, 'is_ordered': is_ordered, 'freq_table': None, 'freq_chart': None, 'fname': fn, 'fcont': fcont,
                      'cnt': cntordr, 'summary': summary, 'summary_tbl': summary_tbl, 'freq_tbl': freq_tbl}
                 indi_variables.append(d)
 
         print("Preparing individual profiles...done")
         print("Preparing overall correlations...")
 
-        #https://stackoverflow.com/questions/20892799/using-pandas-calculate-cram%C3%A9rs-coefficient-matrix
-        dict_cramer = {'col1':[],'col2':[],'cnt':[]}
+        # https://stackoverflow.com/questions/20892799/using-pandas-calculate-cram%C3%A9rs-coefficient-matrix
+        dict_cramer = {'col1': [], 'col2': [], 'cnt': []}
         df_cramer = pd.DataFrame(dict_cramer)
 
         for i in df.columns:
             for j in df.columns:
                 confusion_matrix = pd.crosstab(df[i], df[j])
-                cr= self._cramers_corrected_stat(confusion_matrix=confusion_matrix)
-                df2= pd.DataFrame({'col1':[i],'col2':[j],'cnt':[cr]})
-                #df_cramer.append(df2,ignore_index=True)
-                df_cramer = pd.concat([df_cramer,df2],axis=0,ignore_index=True)
-        ct=pd.crosstab(df_cramer['col1'],df_cramer['col2'],values=df_cramer['cnt'],aggfunc='mean')
+                cr = self._cramers_corrected_stat(
+                    confusion_matrix=confusion_matrix)
+                df2 = pd.DataFrame({'col1': [i], 'col2': [j], 'cnt': [cr]})
+                # df_cramer.append(df2,ignore_index=True)
+                df_cramer = pd.concat(
+                    [df_cramer, df2], axis=0, ignore_index=True)
+        ct = pd.crosstab(df_cramer['col1'], df_cramer['col2'],
+                         values=df_cramer['cnt'], aggfunc='mean')
         plt.figure(figsize=(16, 4))
-        sns.heatmap(ct, annot=True, cmap='Blues', fmt='.2f',linewidth=1)
+        sns.heatmap(ct, annot=True, cmap='Blues', fmt='.2f', linewidth=1)
         tmpfile_c_o = BytesIO()
         plt.savefig(tmpfile_c_o, format='svg')
         plt.close()
@@ -395,18 +438,19 @@ class pandas_cat:
 
         for i in df.columns:
             print(f"... for variable {i}...")
-            dict={'varname':i}
+            dict = {'varname': i}
             dict2 = {}
             for j in df.columns:
                 ct = pd.crosstab(df[i], df[j])
                 print(f"...... doing crosstab {i} x {j}")
                 plt.figure(figsize=(16, 4))
-                sns.heatmap(ct,annot=True,cmap='Blues', fmt='g')
+                sns.heatmap(ct, annot=True, cmap='Blues', fmt='g')
                 tmpfile_c_i = BytesIO()
                 plt.savefig(tmpfile_c_i, format='svg')
                 plt.close()
-                encoded_c_i = base64.b64encode(tmpfile_c_i.getvalue()).decode('utf-8')
-                dict2[j]= encoded_c_i
+                encoded_c_i = base64.b64encode(
+                    tmpfile_c_i.getvalue()).decode('utf-8')
+                dict2[j] = encoded_c_i
 
             dict['vars'] = dict2
             indiv_corr[i] = dict
@@ -417,7 +461,6 @@ class pandas_cat:
 
         print("Preparing individual correlations...done.")
         print("Preparing output file...")
-
 
         fname = "report.html"
 
@@ -434,7 +477,7 @@ class pandas_cat:
 
         template = env.get_template(self.template_name)
 
-        dn=dataset_name
+        dn = dataset_name
 
         if dn is None:
             dn = '&lt;pandas dataframe&gt;'
@@ -453,7 +496,6 @@ class pandas_cat:
         print("Finished preparing profile report.")
         print(f"Your report is ready in file {outname}")
 
-
     def _cramers_corrected_stat(confusion_matrix):
         """ calculate Cramers V statistic for categorial-categorial association.
             uses correction from Bergsma and Wicher,
@@ -466,17 +508,23 @@ class pandas_cat:
         phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
         rcorr = r - ((r - 1) ** 2) / (n - 1)
         kcorr = k - ((k - 1) ** 2) / (n - 1)
-        return np.sqrt(phi2corr / min((kcorr - 1), (rcorr - 1)))
 
-    def _plot_histogram(df, column,sort=False,save=False,save_folder=None,rotate=True):
+        denominator = min((kcorr - 1), (rcorr - 1))
+        if denominator <= 0:
+            return 0
+
+        return np.sqrt(phi2corr / denominator)
+
+    def _plot_histogram(df, column, sort=False, save=False, save_folder=None, rotate=True):
         label_format = '{:,.0f}'
-        data=df
+        data = df
         if sort:
-            data=data.sort_values(by=column)
-        grp=data.groupby(column, dropna=False)[column].count()
+            data = data.sort_values(by=column)
+        grp = data.groupby(column, dropna=False)[column].count()
 
         plt.figure(figsize=(16, 4))
-        a  = sns.barplot(x=grp.index, y=grp.values, color="lightsteelblue",edgecolor="black")
+        a = sns.barplot(x=grp.index, y=grp.values,
+                        color="lightsteelblue", edgecolor="black")
         if rotate:
             plt.xticks(rotation=90)
 
@@ -487,8 +535,8 @@ class pandas_cat:
         if save:
             filename = ""
             if save_folder is not None:
-                filename= save_folder+'\\'
-            filename=filename+column+'.svg'
+                filename = save_folder+'\\'
+            filename = filename+column+'.svg'
             plt.savefig(filename)
         else:
             tmpfile = BytesIO()
@@ -510,7 +558,7 @@ class pandas_cat:
         return f"{B:.2f} {power_labels[n]}"
 
     @staticmethod
-    def prepare(df:pandas.DataFrame=None,opts:dict=None):
+    def prepare(df: pandas.DataFrame = None, opts: dict = None):
         """
         Prepares a categorical dataset. Takes strings, integers etc. variables and if possible, converts it do
         pandas categorical and ordered by their natural value
@@ -519,12 +567,11 @@ class pandas_cat:
 
 
         """
-        #currently we are using CleverMiner's data preparation
-        #we plan to create this package independent on CleverMiner package and move these routines from CleverMiner to this package
+        # currently we are using CleverMiner's data preparation
+        # we plan to create this package independent on CleverMiner package and move these routines from CleverMiner to this package
 
-
-        my_df=df
-        opts2=opts
+        my_df = df
+        opts2 = opts
         if opts2 is None:
             opts2 = {}
         opts2['keep_df'] = True
@@ -534,18 +581,59 @@ class pandas_cat:
         return clm.df
 
     @staticmethod
-    def handle_missing_values(df, values:list=None):
+    def handle_missing_values(df, na_values: list = [], na_ignore: list = [], keep_default_na: bool = True):
         """
         Replaces missing string values with real missing values.
 
         :param df: pandas dataframe
-        :param values: array of additional custom values that should be also detected as missing values
-
+        :param na_values: array of additional custom values that should be also detected as missing values
+        :param na_ignore: array of default values to be removed from the list of missing values
+        :param keep_default_na: if True, the default missing values will be retained, otherwise, only custom values will be used
         """
-        default_missing_values = ['na', 'n/a', 'nan', 'null', 'none', 'missing', 'undefined']
-        missing_values = default_missing_values if values is None else list(set(default_missing_values + values))
+        default_missing_values = ['-1.#IND', '1.#QNAN', '1.#IND', '-1.#QNAN', '#N/A N/A', '#N/A', 'N/A',
+                                  'n/a', 'NA', 'na', '<NA>', '#NA', 'NULL', 'null', 'Null', 'NAN', 'NaN',
+                                  '-NaN', 'nan', '-nan', 'NONE', 'None', 'none', 'UNKNOWN', 'Unknown', 'unknown',
+                                  'UNKNOWN/INVALID', 'Unknown/Invalid', 'Unknown/invalid', 'unknown/invalid',
+                                  'INVALID', 'Invalid', 'invalid', 'UNAVAILABLE', 'Unavailable', 'unavailable',
+                                  'MISSING', 'Missing', 'missing', 'UNSPECIFIED', 'Unspecified', 'unspecified',
+                                  'IGNORE', 'Ignore', 'ignore', 'NO INFO', 'NO_INFO', 'No Info', 'No info', 'no info',
+                                  'no_info', 'UNDETERMINED', 'Undetermined', 'undetermined', 'NOT GIVEN',
+                                  'UNDEFINED', 'Undefined', 'undefined', 'NOT DEFINED', 'Not Defined', 'Not defined',
+                                  'not_defined', 'NOT_GIVEN', 'Not Given', 'Not given', 'not given', 'not_given', 'UNSURE',
+                                  'Unsure', 'unsure', 'I WOULD RATHER NOT SAY', 'I would rather not say',
+                                  'i would rather not say', 'NO DEFINIDO', 'No Definido', 'No definido', 'no definido',
+                                  'no_definido', 'NO COLOR', 'No Color', 'No color', 'no color', 'no_color',
+                                  'NOT RATED', 'NR', 'Not Rated', 'Not rated', 'not rated', 'not_rated', 'nr',
+                                  '""', '?', '–', '-', '']
+        if na_ignore:
+            default_missing_values = [
+                value for value in default_missing_values if value not in na_ignore]
+
+        missing_values = default_missing_values if keep_default_na else []
+
+        if na_values:
+            missing_values.extend(na_values)
+
+        detected_missing_values = {}
+        replaced_counts = {}
 
         for column in df.columns:
-            df[column] = df[column].apply(lambda x: np.nan if str(x).lower() in missing_values else x)
+            categories_counts = df[column].value_counts()
+            missing_counts = categories_counts[categories_counts.index.isin(
+                missing_values)]
 
-        return df
+            detected_missing_values[column] = []
+            replaced_counts[column] = []
+
+            detected_missing_values[column] = missing_counts.index.tolist()
+            replaced_counts[column] = missing_counts.values.tolist()
+
+            na_already_detected_by_pandas = df[column].isna().sum()
+            if na_already_detected_by_pandas > 0:
+                detected_missing_values[column].insert(
+                    0, 'pandas.NAN')
+                replaced_counts[column].insert(0, df[column].isna().sum())
+
+            df[column].replace(missing_values, pd.NA, inplace=True)
+
+        return df, detected_missing_values, replaced_counts

@@ -5,12 +5,20 @@
   left: 50%;
   transform: translate(-50%, -50%);
   max-width: 60rem;
+  max-height: 90vh;
+  overflow-y: scroll;
+  scrollbar-width: none;
   padding: 5rem 6rem;
   background-color: var(--color-grey-0);
   border: 1px solid var(--color-grey-100);
   border-radius: var(--border-radius-md);
   box-shadow: var(--shadow-lg);
   transition: all 0.3s;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    display: none;
+  }
 
   &--hidden {
     visibility: hidden;

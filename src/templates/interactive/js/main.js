@@ -31,6 +31,7 @@ const correlationsPage = document.querySelector('.correlations');
 const totalAttributesStat = document.querySelector('.stats__value--attributes');
 const totalRecordsStat = document.querySelector('.stats__value--records');
 const totalMissStat = document.querySelector('.stats__value--miss');
+const missingBtn = document.querySelector('.stats:has(.stats__value--miss)');
 
 /* Attributes Page - Scrollbar */
 const leftArrow = document.querySelector('.scrollbar__arrow--left');
@@ -45,6 +46,9 @@ const categoriesCountStat = document.querySelector('.stats__value--categories');
 const mostFrequentStat = document.querySelector('.stats__value--most');
 const leastFrequentStat = document.querySelector('.stats__value--least');
 const missingStat = document.querySelector('.stats__value--missing');
+const missingStatBtn = document.querySelector(
+  '.stats:has(.stats__value--missing)'
+);
 
 /* Attributes Page - Graph */
 const minitableEl = document.querySelector('.minitable');
@@ -57,6 +61,7 @@ const barBtn = document.querySelector('.attributes .btn--bar');
 const hbarBtn = document.querySelector('.attributes .btn--hbar');
 const pieBtn = document.querySelector('.attributes .btn--pie');
 const minitableBtn = document.querySelector('.attributes .btn--minitable');
+const missingsBtn = document.querySelector('.attributes .btn--missings');
 const graphOptionsBtns = document.querySelectorAll('.attributes .options .btn');
 const percentBtn = document.querySelector('.attributes .btn--percentage');
 const logBtn = document.querySelector('.attributes .btn--log');
@@ -71,11 +76,12 @@ const selectTwo = document.querySelector('.correlations .select--two');
 const correlationsCanvas = document.querySelector('.canvas--correlations');
 const matrixTitle = document.querySelector('.correlations .heading-2');
 
-/* Correlations Page - Modal */
+/* Modals */
 const helpBtn = document.querySelector('.correlations .btn--help');
-const helpModal = document.querySelector('.modal');
+const excludedBtn = document.querySelector('.btn--excluded');
+const modals = document.querySelectorAll('.modal');
 const overlay = document.querySelector('.overlay');
-const closeBtn = document.querySelector('.modal__close');
+const closeBtns = document.querySelectorAll('.modal__close');
 
 ///////////////////////////////////////////////
 // FUNCTIONS
@@ -165,6 +171,9 @@ function renderGraph(canvas, chart, type) {
   if (chart) chart.destroy();
 
   const data = profiles[canvas.dataset.attribute];
+
+  if (data.detected.length > 0) missingsBtn.classList.remove('btn--hidden');
+  else missingsBtn.classList.add('btn--hidden');
 
   const inputData = {
     labels: [...data.categories],
@@ -257,7 +266,7 @@ function toggleSort(graph) {
   reverseBtn.classList.remove('btn--active');
 
   if (!minitableEl.classList.contains('minitable--hidden')) {
-    return sortMiniTable(graph.canvas);
+    return sortMiniTable(graph);
   }
 
   if (sortBtn.classList.contains('btn--active')) {
@@ -295,12 +304,16 @@ function toggleSort(graph) {
 }
 
 // Sort minitable alphabeticaly
-function sortMiniTable(canvas) {
+function sortMiniTable(graph) {
+  const header = minitableEl.querySelector('.minitable__header');
+  if (header.innerText.includes('Missing')) return;
   const rows = Array.from(minitableEl.querySelectorAll('.minitable__row'));
 
   if (sortBtn.classList.contains('btn--active')) {
     sortBtn.classList.remove('btn--active');
-    const profile = profiles[canvas.dataset.attribute];
+    const attribute =
+      graph._sortedMetasets[0].controller._ctx.canvas.dataset.attribute;
+    const profile = profiles[attribute];
     const rows = [...profile.categories].map(
       (cat, i) =>
         `<li class='minitable__row'>
@@ -310,7 +323,7 @@ function sortMiniTable(canvas) {
         </div>
         </li>`
     );
-    minitableEl.innerHTML = rows.join('\n');
+    minitableEl.innerHTML = header.outerHTML + rows.join('\n');
     return;
   }
 
@@ -333,7 +346,7 @@ function sortMiniTable(canvas) {
 
   sortBtn.classList.add('btn--active');
 
-  minitableEl.innerHTML = sortedHtml;
+  minitableEl.innerHTML = header.outerHTML + sortedHtml;
 }
 
 // Reverse chart columns (data) order
@@ -353,12 +366,13 @@ function toggleReverse(graph) {
 
 // Reverse rows in minitable
 function reverseMinitable() {
+  const header = minitableEl.querySelector('.minitable__header');
   const rows = minitableEl.querySelectorAll('.minitable__row');
   const reversedRows = Array.from(rows)
     .reverse()
     .map((row) => row.outerHTML)
     .join('');
-  minitableEl.innerHTML = reversedRows;
+  minitableEl.innerHTML = header.outerHTML + reversedRows;
 }
 
 // Render correlations matrix
@@ -515,14 +529,17 @@ function colorScaleLegend(min, max, chartColor) {
 }
 
 // Open modal window with help for correlations
-function openModal() {
-  helpModal.classList.remove('modal--hidden');
+function openModal(className) {
+  const modal = document.querySelector(className);
+  modal.classList.remove('modal--hidden');
   overlay.classList.remove('overlay--hidden');
 }
 
 // Close modal window with help for correlations
 function closeModal() {
-  helpModal.classList.add('modal--hidden');
+  modals.forEach((modal) => {
+    modal.classList.add('modal--hidden');
+  });
   overlay.classList.add('overlay--hidden');
 }
 
@@ -681,6 +698,12 @@ function handlePieBtn() {
   logBtn.classList.add('btn--hidden');
 }
 
+// Header for minitable of attributes
+const minitableHeader = `<li class='minitable__header'>
+<div class='minitable__field'>Categories</div>
+<div class='minitable__field'>Counts</div>
+<div class='minitable__field'>Percentage</div></li>`;
+
 // Render minitable at attributes page
 function handleMinitableBtn() {
   graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
@@ -701,7 +724,44 @@ function handleMinitableBtn() {
       </div>
       </li>`
   );
-  minitableEl.innerHTML = rows.join('\n');
+  minitableEl.innerHTML = minitableHeader + rows.join('\n');
+  minitableEl.classList.remove('minitable--hidden');
+}
+
+// Header for minitable of missings
+const missingsHeader = `<li class='minitable__header'>
+<div class='minitable__field'>Missing values</div>
+<div class='minitable__field'>Counts</div>
+<div class='minitable__field'>Percentage</div></li>`;
+
+// Render missings table at attributes page
+function handleMissingsBtn() {
+  const profile = profiles[attributesCanvas.dataset.attribute];
+  if (profile.detected.length === 0) return;
+
+  graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
+  missingsBtn.classList.add('btn--active');
+  graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
+  percentBtn.classList.add('btn--hidden');
+  logBtn.classList.add('btn--hidden');
+  donutBtn.classList.add('btn--hidden');
+  attributesChart.destroy();
+
+  attributesCanvas.classList.add('canvas--hidden');
+  const rows = profile.detected.map(
+    (det, i) =>
+      `<li class='minitable__row'>
+    <div class='minitable__field'>${det === '' ? 'Blank values' : det}</div>
+    <div class='minitable__field'>${profile.replaced[i]}</div>
+    <div class='minitable__field'>${(
+      (profile.replaced[i] /
+        (profile.counts.reduce((a, c) => a + c, 0) + profile.missing)) *
+      100
+    ).toFixed(2)} %
+      </div>
+      </li>`
+  );
+  minitableEl.innerHTML = missingsHeader + rows.join('\n');
   minitableEl.classList.remove('minitable--hidden');
 }
 
@@ -793,6 +853,8 @@ barBtn.addEventListener('click', () => handleBarBtn());
 hbarBtn.addEventListener('click', () => handleHbarBtn());
 pieBtn.addEventListener('click', () => handlePieBtn());
 minitableBtn.addEventListener('click', () => handleMinitableBtn());
+missingsBtn.addEventListener('click', () => handleMissingsBtn());
+missingStatBtn.addEventListener('click', () => handleMissingsBtn());
 
 /* Graph Options Buttons */
 percentBtn.addEventListener('click', () => togglePercentage(attributesChart));
@@ -844,13 +906,24 @@ window.addEventListener('resize', updateScrollbarIcons);
 selectOne.addEventListener('change', () => handleSelectOne());
 selectTwo.addEventListener('change', () => handleSelectTwo());
 
-/* Modal window for correlations help */
-helpBtn.addEventListener('click', openModal);
-closeBtn.addEventListener('click', closeModal);
+/* Opening modals */
+if (excludedBtn) {
+  excludedBtn.addEventListener('click', () => openModal('.modal--excluded'));
+}
+helpBtn.addEventListener('click', () => openModal('.modal--correlations'));
+missingBtn.addEventListener('click', () => openModal('.modal--missings'));
+
+/* Closing modals */
+closeBtns.forEach((closeBtn) => {
+  closeBtn.addEventListener('click', closeModal);
+});
 overlay.addEventListener('click', closeModal);
 
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape' && !helpModal.classList.contains('modal--hidden')) {
+  if (
+    e.key === 'Escape' &&
+    !correlationsModal.classList.contains('modal--hidden')
+  ) {
     closeModal();
   }
 });
