@@ -83,6 +83,28 @@
     }
   }
 
+  &--print {
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    margin: 5px 1px;
+    border-radius: var(--border-radius-sm);
+
+    & svg {
+      width: 2.4rem;
+      height: 2.4rem;
+      color: var(--color-brand-dark);
+    }
+
+    &:hover {
+      background-color: transparent;
+
+      & svg {
+        fill: transparent;
+      }
+    }
+  }
+
   &--hidden {
     display: none;
   }

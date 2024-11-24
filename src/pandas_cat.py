@@ -44,7 +44,7 @@ class pandas_cat:
             * **cat_limit** - limit number of categories to profile (default=20)
             * **na_values** - array of additional custom values that should be detected as missing
             * **na_ignore** - array of values (from default list) that should not be detected as missings
-            * **keep_default_na** - boolean to completely override the default missing values list 
+            * **keep_default_na** - boolean to completely override the default missing values list
         """
         self = pandas_cat
 
@@ -74,7 +74,7 @@ class pandas_cat:
                 # If categories count is over the limit remove attribute
                 if len(categories_counts) > options['cat_limit']:
                     removed_attribute_profile = {
-                        "attribute": categories_counts.name, "categories": len(categories_counts)}
+                        "attribute": column, "categories": len(categories_counts)}
                     excluded_attributes.append(removed_attribute_profile)
                     df.drop(column, axis=1, inplace=True)
                     continue
@@ -87,12 +87,12 @@ class pandas_cat:
                 profile = {
                     'attribute': column,
                     'categories': categories_counts.index.tolist(),
-                    'counts': categories_counts.values.tolist(),
-                    'percentages': [round((val / (categories_counts.values.sum() + missing_count)) * 100, 2) for val in categories_counts.values.tolist()],
-                    'missing': missing_count,
+                    'counts': [int(val) for val in categories_counts.values.tolist()],
+                    'percentages': [float(round((val / (categories_counts.values.sum() + missing_count)) * 100, 2)) for val in categories_counts.values.tolist()],
+                    'missing': int(missing_count),
                     'ram': formated_ram,
-                    'detected': detected_missings[column],
-                    'replaced': replaced_counts[column]
+                    'detected': [str(val) for val in detected_missings[column]],
+                    'replaced': [int(val) for val in replaced_counts[column]]
                 }
                 # Store profile
                 attribute_profiles.append(profile)
@@ -101,17 +101,43 @@ class pandas_cat:
 
             # Storage for correlations
             correlations_data = {}
-            correlations_data['Overall Correlations'] = []
+            correlations_data['Cramers V'] = []
+            correlations_data['Spearman Rank'] = []
+            correlations_data['Theils U'] = []
 
             for column_one in df.columns:
                 for column_two in df.columns:
+                    # Calculate Cramer's V
                     confusion_matrix = pd.crosstab(
                         df[column_one], df[column_two])
-                    correlation = round(
-                        self._cramers_corrected_stat(confusion_matrix), 3)
-                    entry = {"x": column_one,
-                             "y": column_two, "v": correlation}
-                    correlations_data['Overall Correlations'].append(entry)
+                    cramers_v = round(
+                        float(self._cramers_corrected_stat(confusion_matrix)), 3)
+                    entry_cramers = {"x": column_one,
+                                     "y": column_two, "v": cramers_v}
+                    correlations_data['Cramers V'].append(entry_cramers)
+
+                    # Convert categorical data to numeric codes for Spearman rank correlation
+                    col_one = df[column_one]
+                    col_two = df[column_two]
+                    if col_one.dtype == 'object' or is_categorical_dtype(col_one):
+                        col_one = col_one.astype('category').cat.codes
+                    if col_two.dtype == 'object' or is_categorical_dtype(col_two):
+                        col_two = col_two.astype('category').cat.codes
+
+                    # Calculate Spearman rank correlation
+                    spearman_corr, _ = ss.spearmanr(
+                        col_one, col_two, nan_policy='omit')
+                    spearman_corr = round(float(spearman_corr), 3)
+                    entry_spearman = {"x": column_one,
+                                      "y": column_two, "v": spearman_corr}
+                    correlations_data['Spearman Rank'].append(entry_spearman)
+
+                    # Calculate Theil's U
+                    theils_u = round(float(self._theils_u(
+                        df[column_one], df[column_two])), 3)
+                    entry_theils_u = {"x": column_one,
+                                      "y": column_two, "v": theils_u}
+                    correlations_data['Theils U'].append(entry_theils_u)
 
             print('Progress 4/6: Calculating individual correlations...')
 
@@ -124,7 +150,7 @@ class pandas_cat:
                     # Iterate over each combination of categories
                     for k, category_one in enumerate(crosstab_data['index']):
                         for l, category_two in enumerate(crosstab_data['columns']):
-                            correlation = crosstab_data['data'][k][l]
+                            correlation = float(crosstab_data['data'][k][l])
                             entry = {"x": category_one,
                                      "y": category_two, "v": correlation}
                             key = f"{column_one} x {column_two}"
@@ -213,7 +239,8 @@ class pandas_cat:
             cnt = len(lst)
             print(f"...variable {var} has {cnt} categories")
             if cnt > limit:
-                print(f"WARNING: variable {var} has been removed from profiling because it has {cnt} categories, which is over limit {limit}. Note you may increase the limit of allowed categories by setting the parameter cat_limit.")
+                print(f"WARNING: variable {var} has been removed from profiling because it has {cnt} categories, which is over limit {
+                      limit}. Note you may increase the limit of allowed categories by setting the parameter cat_limit.")
                 warning_info.append({'type': 'alert-warning', 'text': 'WARNING: variable '+var+' has been removed from profiling because it has '+str(
                     cnt)+' categories, which is over the limit of '+str(limit)+' categories.<br> Note you may increase the limit of allowed categories by setting the parameter <i>cat_limit</i>.'})
                 to_drop.append(var)
@@ -514,6 +541,36 @@ class pandas_cat:
             return 0
 
         return np.sqrt(phi2corr / denominator)
+
+    def _theils_u(x, y):
+        """Calculate Theil's U statistic for categorical-categorical association."""
+        from collections import Counter
+        import math
+
+        def conditional_entropy(x, y):
+            """Calculates conditional entropy."""
+            y_counter = Counter(y)
+            xy_counter = Counter(list(zip(x, y)))
+            total_occurrences = sum(y_counter.values())
+            entropy = 0
+            epsilon = np.finfo(float).eps
+
+            for xy in xy_counter.keys():
+                p_xy = xy_counter[xy] / total_occurrences
+                p_y = y_counter[xy[1]] / total_occurrences
+                p_x_given_y = p_xy / (p_y + epsilon)
+                entropy += p_xy * math.log(p_x_given_y, 2)
+
+            return -entropy
+
+        H_xy = conditional_entropy(x, y)
+        x_counter = Counter(x)
+        total_occurrences = sum(x_counter.values())
+        p_x = list(map(lambda count: count /
+                   total_occurrences, x_counter.values()))
+        H_x = ss.entropy(p_x, base=2)
+
+        return (H_x - H_xy) / H_x if H_x != 0 else 0
 
     def _plot_histogram(df, column, sort=False, save=False, save_folder=None, rotate=True):
         label_format = '{:,.0f}'

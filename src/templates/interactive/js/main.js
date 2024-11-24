@@ -3,23 +3,23 @@
 ///////////////////////////////////////////////
 // GLOBAL VARIABLES
 
-const profiles = attributeProfiles; // data from python
-const correlations = correlationsData; // data from python
-let attributesChart = null; // graph displayed at the attributes page
-let correlationsChart = null; // graph displayed at the correlations page
+const profiles = JSON.parse(`{{ attribute_profiles | tojson  }}`); // data from python
+const correlations = JSON.parse(`{{ correlations_data | tojson }}`); // data from python
 let isDragging = false; // attributes scrollbar mouse dragging indicator
 let chartColors = null; // color scheme for Chart.js
+let isPrintView = false; // all at once view indicator
 
 ///////////////////////////////////////////////
 // ELEMENTS
 
 /* Header */
 const heading = document.querySelector('.heading-1');
+const toggleViewBtn = document.querySelector('.btn--print');
 const darkmodeBtn = document.querySelector('.btn--darkmode');
 const navigations = document.querySelectorAll('.nav .btn');
-const summaryNav = document.querySelector('#summary');
-const attributesNav = document.querySelector('#attributes');
-const correlationsNav = document.querySelector('#correlations');
+const summaryNav = document.querySelector('.btn--summary');
+const attributesNav = document.querySelector('.btn--attributes');
+const correlationsNav = document.querySelector('.btn--correlations');
 
 /* Pages */
 const pages = document.querySelectorAll('.page');
@@ -33,14 +33,6 @@ const totalRecordsStat = document.querySelector('.stats__value--records');
 const totalMissStat = document.querySelector('.stats__value--miss');
 const missingBtn = document.querySelector('.stats:has(.stats__value--miss)');
 
-/* Attributes Page - Scrollbar */
-const leftArrow = document.querySelector('.scrollbar__arrow--left');
-const leftArrowIcon = document.querySelector('.scrollbar__arrow--left svg');
-const rightArrow = document.querySelector('.scrollbar__arrow--right');
-const rightArrowIcon = document.querySelector('.scrollbar__arrow--right svg');
-const chipsList = document.querySelector('.scrollbar__chips');
-const attributeBtns = document.querySelectorAll('.btn--attribute');
-
 /* Attributes Page - Statistics */
 const categoriesCountStat = document.querySelector('.stats__value--categories');
 const mostFrequentStat = document.querySelector('.stats__value--most');
@@ -49,32 +41,6 @@ const missingStat = document.querySelector('.stats__value--missing');
 const missingStatBtn = document.querySelector(
   '.stats:has(.stats__value--missing)'
 );
-
-/* Attributes Page - Graph */
-const minitableEl = document.querySelector('.minitable');
-const graphTitle = document.querySelector('.box--chart .heading-2');
-const attributesCanvas = document.querySelector('.canvas--attributes');
-
-/* Attributes Page - Graph Controls */
-const graphTypesBtns = document.querySelectorAll('.attributes .type .btn');
-const barBtn = document.querySelector('.attributes .btn--bar');
-const hbarBtn = document.querySelector('.attributes .btn--hbar');
-const pieBtn = document.querySelector('.attributes .btn--pie');
-const minitableBtn = document.querySelector('.attributes .btn--minitable');
-const missingsBtn = document.querySelector('.attributes .btn--missings');
-const graphOptionsBtns = document.querySelectorAll('.attributes .options .btn');
-const percentBtn = document.querySelector('.attributes .btn--percentage');
-const logBtn = document.querySelector('.attributes .btn--log');
-const donutBtn = document.querySelector('.attributes .btn--donut');
-const sortBtn = document.querySelector('.attributes .btn--sort');
-const reverseBtn = document.querySelector('.attributes .btn--reverse');
-
-/* Correlations Page - Graph */
-const selectOne = document.querySelector('.correlations .select--one');
-const divider = document.querySelector('.correlations .divider');
-const selectTwo = document.querySelector('.correlations .select--two');
-const correlationsCanvas = document.querySelector('.canvas--correlations');
-const matrixTitle = document.querySelector('.correlations .heading-2');
 
 /* Modals */
 const helpBtn = document.querySelector('.correlations .btn--help');
@@ -100,6 +66,17 @@ function loadReport() {
 
 // Switch between report pages
 function displayPage(page) {
+  if (isPrintView) {
+    document
+      .querySelector(`.${page}`)
+      .scrollIntoView({ behavior: 'smooth', block: 'start' });
+    navigations.forEach((navEl) => navEl.classList.remove('btn--active'));
+    document
+      .querySelector(`.nav .btn[href="#${page}"]`)
+      .classList.add('btn--active');
+    return;
+  }
+
   pages.forEach((pageEl) => pageEl.classList.remove('page--active'));
   navigations.forEach((navEl) => navEl.classList.remove('btn--active'));
 
@@ -114,28 +91,89 @@ function displayPage(page) {
       attributesNav.classList.add('btn--active');
       updateScrollbarIcons();
       if (document.querySelectorAll('.scrollbar .btn--active').length === 0) {
-        attributeBtns[0].classList.add('btn--active');
+        document.querySelector('.btn--attribute').classList.add('btn--active');
         updateStats(profiles[0]);
-        attributesChart = renderGraph(attributesCanvas, attributesChart, 'bar');
+        const attributesCanvas = document.querySelector('.attributes .canvas');
+        const box = attributesCanvas.closest('.box--chart');
+        box
+          .querySelector('.btn--bar')
+          .addEventListener('click', () => handleBarBtn(0));
+        box
+          .querySelector('.btn--hbar')
+          .addEventListener('click', () => handleHbarBtn(0));
+        box
+          .querySelector('.btn--pie')
+          .addEventListener('click', () => handlePieBtn(0));
+        box
+          .querySelector('.btn--minitable')
+          .addEventListener('click', () => handleMinitableBtn(0));
+        box
+          .querySelector('.btn--missings')
+          .addEventListener('click', () => handleMissingsBtn(0));
+        box
+          .querySelector('.btn--percentage')
+          .addEventListener('click', () => togglePercentage(0));
+        box
+          .querySelector('.btn--log')
+          .addEventListener('click', () => toggleLogScale(0));
+        box
+          .querySelector('.btn--donut')
+          .addEventListener('click', () => toggleCutout(0));
+        box
+          .querySelector('.btn--sort')
+          .addEventListener('click', () => toggleSort(0));
+        box
+          .querySelector('.btn--reverse')
+          .addEventListener('click', () => toggleReverse(0));
+        renderGraph(attributesCanvas, 'bar');
       }
       break;
 
     case 'correlations':
       correlationsPage.classList.add('page--active');
       correlationsNav.classList.add('btn--active');
-      if (correlationsChart === null) {
-        correlationsChart = renderMatrix(correlationsCanvas, correlationsChart);
-      }
+      renderMatrix(document.querySelector('.canvas--correlations'));
       break;
   }
 }
 
+// Update active state of navigation links based on scroll position
+function updateActiveNav() {
+  const sections = document.querySelectorAll('.page');
+  const options = {
+    root: null,
+    rootMargin: '-52px 0px 0px 0px',
+    threshold: 0.5,
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const sectionId = entry.target.id;
+        navigations.forEach((navEl) => {
+          const isActive = navEl.getAttribute('href') === `#${sectionId}`;
+          navEl.classList.toggle('btn--active', isActive);
+        });
+      }
+    });
+  }, options);
+
+  sections.forEach((section) => {
+    observer.observe(section);
+  });
+}
+
 // Display or hide scrollbar nav arrows at the attributes page
 function updateScrollbarIcons() {
+  const chipsList = document.querySelector('.scrollbar__chips');
   const scrollLeft = chipsList.scrollLeft;
   const max = chipsList.scrollWidth - chipsList.clientWidth - 10;
-  leftArrow.classList.toggle('scrollbar__arrow--active', scrollLeft >= 10);
-  rightArrow.classList.toggle('scrollbar__arrow--active', scrollLeft < max);
+  document
+    .querySelector('.scrollbar__arrow--left')
+    .classList.toggle('scrollbar__arrow--active', scrollLeft >= 10);
+  document
+    .querySelector('.scrollbar__arrow--right')
+    .classList.toggle('scrollbar__arrow--active', scrollLeft < max);
 }
 
 // Update stats boxes at the attributes pages
@@ -146,7 +184,7 @@ function updateStats(profile) {
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-  graphTitle.innerText = title;
+  document.querySelector('.box--chart .heading-2').innerText = title;
 
   missingStat.innerHTML = `${(+profile.missing).toLocaleString()} <span>(${(
     (profile.missing /
@@ -167,11 +205,14 @@ function updateStats(profile) {
 }
 
 // Render graph according to selected attribute
-function renderGraph(canvas, chart, type) {
+function renderGraph(canvas, type) {
+  const chart = Chart.getChart(canvas);
   if (chart) chart.destroy();
 
   const data = profiles[canvas.dataset.attribute];
 
+  const box = canvas.closest('.box');
+  const missingsBtn = box.querySelector('.attributes .btn--missings');
   if (data.detected.length > 0) missingsBtn.classList.remove('btn--hidden');
   else missingsBtn.classList.add('btn--hidden');
 
@@ -214,106 +255,139 @@ function renderGraph(canvas, chart, type) {
 }
 
 // Switch between pie and donut chart
-function toggleCutout(graph) {
-  if (graph.options.type !== 'pie') return;
-  donutBtn.classList.toggle('btn--active');
-  graph.options.cutout = graph?.options?.cutout === 0 ? '50%' : 0;
-  graph.update();
+function toggleCutout(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const chart = Chart.getChart(canvas);
+  if (chart.options.type !== 'pie') return;
+  const box = canvas.closest('.box');
+  box.querySelector('.btn--donut').classList.toggle('btn--active');
+  chart.options.cutout = chart?.options?.cutout === 0 ? '50%' : 0;
+  chart.update();
 }
 
 // Switch between percentage and nominal scale
-function togglePercentage(graph) {
-  if (!['bar', 'pie'].includes(graph.options.type)) return;
+function togglePercentage(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  const chart = Chart.getChart(canvas);
 
+  if (!['bar', 'pie'].includes(chart.options.type)) return;
+
+  const percentBtn = box.querySelector('.btn--percentage');
   const isPercentage = percentBtn.classList.contains('btn--active');
   percentBtn.classList.toggle('btn--active');
-  const valueAxis = graph.options.indexAxis === 'x' ? 'y' : 'x';
+  const valueAxis = chart.options.indexAxis === 'x' ? 'y' : 'x';
 
   if (isPercentage) {
-    graph.data.datasets[0].data = [...graph.data.datasets[0].counts];
-    delete graph.options.plugins.tooltip.callbacks.label;
-    if (graph.options.type === 'bar') {
-      delete graph.options.scales[valueAxis].ticks.callback;
+    chart.data.datasets[0].data = [...chart.data.datasets[0].counts];
+    delete chart.options.plugins.tooltip.callbacks.label;
+    if (chart.options.type === 'bar') {
+      delete chart.options.scales[valueAxis].ticks.callback;
     }
   }
 
   if (!isPercentage) {
-    graph.data.datasets[0].data = [...graph.data.datasets[0].percentages];
-    graph.options.plugins.tooltip.callbacks.label = (context) =>
+    chart.data.datasets[0].data = [...chart.data.datasets[0].percentages];
+    chart.options.plugins.tooltip.callbacks.label = (context) =>
       `${context.dataset.label}: ${context.raw} %`;
-    if (graph.options.type === 'bar') {
-      graph.options.scales[valueAxis].ticks.callback = (value) => `${value} %`;
+    if (chart.options.type === 'bar') {
+      chart.options.scales[valueAxis].ticks.callback = (value) => `${value} %`;
     }
   }
 
-  graph.update();
+  chart.update();
 }
 
 // Switch between logarithmic and normal scale
-function toggleLogScale(graph) {
-  if (graph.options.type !== 'bar') return;
-  logBtn.classList.toggle('btn--active');
-  const valueAxis = graph.options.indexAxis === 'x' ? 'y' : 'x';
-  graph.options.scales[valueAxis].type =
-    graph.options.scales[valueAxis].type !== 'logarithmic'
+function toggleLogScale(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  const chart = Chart.getChart(canvas);
+  if (chart.options.type !== 'bar') return;
+  box.querySelector('.btn--log').classList.toggle('btn--active');
+  const valueAxis = chart.options.indexAxis === 'x' ? 'y' : 'x';
+  chart.options.scales[valueAxis].type =
+    chart.options.scales[valueAxis].type !== 'logarithmic'
       ? 'logarithmic'
       : 'linear';
-  graph.update();
+  chart.update();
+}
+
+/* Check if array contains only numbers */
+function isArrayOfNumbers(array) {
+  return array.every((item) => typeof item === 'number');
 }
 
 // Sort chart alphabeticaly
-function toggleSort(graph) {
-  reverseBtn.classList.remove('btn--active');
+function toggleSort(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  const chart = Chart.getChart(canvas);
+  const sortBtn = box.querySelector('.btn--sort');
 
-  if (!minitableEl.classList.contains('minitable--hidden')) {
-    return sortMiniTable(graph);
+  box.querySelector('.btn--reverse').classList.remove('btn--active');
+
+  if (
+    !box.querySelector('.minitable').classList.contains('minitable--hidden')
+  ) {
+    return sortMiniTable(index, box, chart);
   }
 
   if (sortBtn.classList.contains('btn--active')) {
     sortBtn.classList.remove('btn--active');
-    const isPercentageScale = percentBtn.classList.contains('btn--active');
-    const profile = profiles[graph.canvas.dataset.attribute];
-    graph.config.data.labels = [...profile.categories];
-    graph.config.data.datasets[0].data = isPercentageScale
+    const isPercentageScale = document
+      .querySelector('.attributes .btn--percentage')
+      .classList.contains('btn--active');
+    const profile = profiles[chart.canvas.dataset.attribute];
+    chart.config.data.labels = [...profile.categories];
+    chart.config.data.datasets[0].data = isPercentageScale
       ? [...profile.percentages]
       : [...profile.counts];
-    graph.config.data.datasets[0].counts = [...profile.counts];
-    graph.config.data.datasets[0].percentages = [...profile.percentages];
-    return graph.update();
+    chart.config.data.datasets[0].counts = [...profile.counts];
+    chart.config.data.datasets[0].percentages = [...profile.percentages];
+    return chart.update();
   }
 
   sortBtn.classList.add('btn--active');
 
-  const data = graph.config.data.datasets[0].data.map((data, i) => [
-    graph.config.data.labels[i],
+  const data = chart.config.data.datasets[0].data.map((data, i) => [
+    chart.config.data.labels[i],
     data,
-    graph.config.data.datasets[0].counts[i],
-    graph.config.data.datasets[0].percentages[i],
+    chart.config.data.datasets[0].counts[i],
+    chart.config.data.datasets[0].percentages[i],
   ]);
 
   const sorted = isArrayOfNumbers(data.map((v) => v[0]))
     ? data.slice().sort((a, b) => a[0] - b[0])
     : data.slice().sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
-  graph.config.data.datasets[0].data = sorted.map((data) => data[1]);
-  graph.config.data.labels = sorted.map((data) => data[0]);
-  graph.config.data.datasets[0].counts = sorted.map((data) => data[2]);
-  graph.config.data.datasets[0].percentages = sorted.map((data) => data[3]);
+  chart.config.data.datasets[0].data = sorted.map((data) => data[1]);
+  chart.config.data.labels = sorted.map((data) => data[0]);
+  chart.config.data.datasets[0].counts = sorted.map((data) => data[2]);
+  chart.config.data.datasets[0].percentages = sorted.map((data) => data[3]);
 
-  graph.update();
+  chart.update();
 }
 
 // Sort minitable alphabeticaly
-function sortMiniTable(graph) {
+function sortMiniTable(index, box, chart) {
+  const minitableEl = box.querySelector('.minitable');
   const header = minitableEl.querySelector('.minitable__header');
   if (header.innerText.includes('Missing')) return;
   const rows = Array.from(minitableEl.querySelectorAll('.minitable__row'));
+  const sortBtn = box.querySelector('.btn--sort');
 
   if (sortBtn.classList.contains('btn--active')) {
     sortBtn.classList.remove('btn--active');
-    const attribute =
-      graph._sortedMetasets[0].controller._ctx.canvas.dataset.attribute;
-    const profile = profiles[attribute];
+    const profile = profiles[index];
     const rows = [...profile.categories].map(
       (cat, i) =>
         `<li class='minitable__row'>
@@ -350,22 +424,28 @@ function sortMiniTable(graph) {
 }
 
 // Reverse chart columns (data) order
-function toggleReverse(graph) {
-  reverseBtn.classList.toggle('btn--active');
+function toggleReverse(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  const chart = Chart.getChart(canvas);
+  box.querySelector('.btn--reverse').classList.toggle('btn--active');
 
+  const minitableEl = box.querySelector('.minitable');
   if (!minitableEl.classList.contains('minitable--hidden')) {
-    return reverseMinitable();
+    return reverseMinitable(minitableEl);
   }
 
-  graph.config.data.datasets[0].data.reverse();
-  graph.config.data.datasets[0].counts.reverse();
-  graph.config.data.datasets[0].percentages.reverse();
-  graph.config.data.labels.reverse();
-  graph.update();
+  chart.config.data.datasets[0].data.reverse();
+  chart.config.data.datasets[0].counts.reverse();
+  chart.config.data.datasets[0].percentages.reverse();
+  chart.config.data.labels.reverse();
+  chart.update();
 }
 
 // Reverse rows in minitable
-function reverseMinitable() {
+function reverseMinitable(minitableEl) {
   const header = minitableEl.querySelector('.minitable__header');
   const rows = minitableEl.querySelectorAll('.minitable__row');
   const reversedRows = Array.from(rows)
@@ -375,24 +455,72 @@ function reverseMinitable() {
   minitableEl.innerHTML = header.outerHTML + reversedRows;
 }
 
+// Copy chart to clipboard as PNG
+async function copyChartToClipboard(button) {
+  try {
+    const box = button.closest('.box');
+    const canvas = box.querySelector('canvas');
+    const isDarkMode = document.documentElement.classList.contains('dark-mode');
+    const originalBackgroundColor = canvas.style.backgroundColor;
+
+    if (isDarkMode) {
+      // For dark mode we need to add a dark background to the canvas
+      const styles = getComputedStyle(document.documentElement);
+      const darkBackgroundColor = styles.getPropertyValue('--color-grey-0');
+      const tempCanvas = document.createElement('canvas');
+      const tempContext = tempCanvas.getContext('2d');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      tempContext.fillStyle = darkBackgroundColor;
+      tempContext.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      tempContext.drawImage(canvas, 0, 0);
+      const tempBlob = await new Promise((resolve) =>
+        tempCanvas.toBlob(resolve)
+      );
+      const tempImage = new Image();
+      tempImage.src = URL.createObjectURL(tempBlob);
+      await new Promise((resolve) => {
+        tempImage.onload = () => {
+          const context = canvas.getContext('2d');
+          context.drawImage(tempImage, 0, 0);
+          resolve();
+        };
+      });
+    }
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve));
+    const item = new ClipboardItem({ 'image/png': blob });
+    await navigator.clipboard.write([item]);
+    canvas.style.backgroundColor = originalBackgroundColor;
+  } catch (err) {
+    console.error('Failed to copy chart: ', err);
+    alert('Failed to copy chart!');
+  }
+}
+
 // Render correlations matrix
-function renderMatrix(canvas, graph) {
-  if (graph) graph.destroy();
+function renderMatrix(canvas) {
+  const chart = Chart.getChart(canvas);
+  if (chart) chart.destroy();
 
   const styles = getComputedStyle(document.documentElement);
-  const chartColor = styles.getPropertyValue('--color-two');
+  const chartColorPositive = styles.getPropertyValue('--color-two');
+  const chartColorNegative = styles.getPropertyValue('--color-one');
   const data = correlations[canvas.dataset.correlations];
   const maxCorrelation = Math.max(...data.map((corr) => corr.v));
-  const attributeOne = selectOne.value;
-  const attributeTwo = selectTwo.value;
+  const [attributeOne, attributeTwo] = canvas.dataset.correlations.split(' x ');
 
   const labelsX =
-    attributeOne === 'Overall Correlations'
+    attributeOne === 'Cramers V' ||
+    attributeOne === 'Spearman Rank' ||
+    attributeOne === 'Theils U'
       ? profiles.map((p) => p.attribute)
       : profiles.find((p) => p.attribute === attributeOne).categories;
 
   const labelsY =
-    attributeOne === 'Overall Correlations'
+    attributeOne === 'Cramers V' ||
+    attributeOne === 'Spearman Rank' ||
+    attributeOne === 'Theils U'
       ? profiles.map((p) => p.attribute)
       : profiles.find((p) => p.attribute === attributeTwo).categories;
 
@@ -410,9 +538,13 @@ function renderMatrix(canvas, graph) {
         label: heading.innerText,
         data: data,
         backgroundColor: (context) => {
+          const value = context.dataset.data[context.dataIndex].v;
           const transparency =
-            context.dataset.data[context.dataIndex].v / maxCorrelation;
-          return changeTransparency(chartColor, transparency);
+            Math.abs(value) /
+            (attributeOne === 'Spearman Rank' ? 1 : maxCorrelation);
+          return value < 0
+            ? changeTransparency(chartColorNegative, transparency)
+            : changeTransparency(chartColorPositive, transparency);
         },
         width(context) {
           const a = context.chart.chartArea;
@@ -476,19 +608,37 @@ function renderMatrix(canvas, graph) {
               const data = context.dataset.data[context.dataIndex];
               return `${data.x} x ${data.y}: ${data.v}`;
             },
-            title: () => `${matrixTitle.innerText}`,
+            title: () =>
+              `${
+                document.querySelector('.correlations .box .heading-2')
+                  .innerText
+              }`,
           },
         },
       },
     },
-    plugins: [colorScaleLegend(0, maxCorrelation, chartColor)],
+    plugins: [
+      colorScaleLegend(
+        attributeOne === 'Spearman Rank' ? -1 : 0,
+        attributeOne === 'Spearman Rank' ? 1 : maxCorrelation,
+        chartColorPositive,
+        chartColorNegative,
+        attributeOne
+      ),
+    ],
   };
 
   return new Chart(canvas, config);
 }
 
 // ColorScaleLegend plugin for correlation matrix
-function colorScaleLegend(min, max, chartColor) {
+function colorScaleLegend(
+  min,
+  max,
+  chartColorPositive,
+  chartColorNegative,
+  correlationType
+) {
   return {
     id: 'colorScaleLegend',
     afterDatasetsDraw(chart) {
@@ -501,8 +651,15 @@ function colorScaleLegend(min, max, chartColor) {
       } = chart;
 
       const gradient = ctx.createLinearGradient(0, top, 0, height);
-      gradient.addColorStop(0, changeTransparency(chartColor, 1));
-      gradient.addColorStop(1, changeTransparency(chartColor, 0));
+      if (correlationType === 'Spearman Rank') {
+        gradient.addColorStop(0, changeTransparency(chartColorPositive, 1));
+        gradient.addColorStop(0.5, changeTransparency(chartColorPositive, 0));
+        gradient.addColorStop(0.5, changeTransparency(chartColorNegative, 0));
+        gradient.addColorStop(1, changeTransparency(chartColorNegative, 1));
+      } else {
+        gradient.addColorStop(0, changeTransparency(chartColorPositive, 1));
+        gradient.addColorStop(1, changeTransparency(chartColorPositive, 0));
+      }
 
       ctx.fillStyle = gradient;
       ctx.fillRect(right + layout.padding.right - 30, top, 15, height);
@@ -511,18 +668,18 @@ function colorScaleLegend(min, max, chartColor) {
 
       ctx.font = '12px Poppins';
       ctx.textAlign = 'center';
-      ctx.fillStyle = styles.getPropertyValue('--color-grey-700'); // TODO fix
+      ctx.fillStyle = styles.getPropertyValue('--color-grey-700');
 
       ctx.fillText(
-        selectOne.value === 'Overall Correlations' ? min.toFixed(2) : min,
+        max.toFixed(2),
         right + layout.padding.right - 22.5,
-        bottom + 12
+        top - 10
       );
 
       ctx.fillText(
-        selectOne.value === 'Overall Correlations' ? max.toFixed(2) : max,
+        min.toFixed(2),
         right + layout.padding.right - 22.5,
-        top - 10
+        bottom + 12
       );
     },
   };
@@ -622,7 +779,7 @@ function updateChartColors(chart) {
 
   if (chartType === 'bar') {
     chart.config.data.datasets[0].backgroundColor =
-      chartColors[attributesCanvas.dataset.attribute % chartColors.length];
+      chartColors[chart.canvas.dataset.attribute % chartColors.length];
   }
 
   if (chartType === 'pie') {
@@ -653,7 +810,7 @@ function changeTransparency(hexColor, transparency) {
 /* Format summary stats according to localization */
 function formatSummaryStats() {
   totalAttributesStat.innerText =
-    (+totalAttributesStat.innerText).toLocaleString();
+    totalAttributesStat.innerText.toLocaleString();
   totalRecordsStat.innerText = (+totalRecordsStat.innerText).toLocaleString();
   totalMissStat.innerHTML = `${(+totalMissStat.innerText
     .split('(')[0]
@@ -663,39 +820,60 @@ function formatSummaryStats() {
 }
 
 // Render bar chart at attributes page
-function handleBarBtn() {
-  minitableEl.classList.add('minitable--hidden');
-  attributesChart = renderGraph(attributesCanvas, attributesChart, 'bar');
-  graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  barBtn.classList.add('btn--active');
-  percentBtn.classList.remove('btn--hidden');
-  logBtn.classList.remove('btn--hidden');
-  donutBtn.classList.add('btn--hidden');
+function handleBarBtn(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  box.querySelector('.minitable').classList.add('minitable--hidden');
+  canvas.classList.remove('canvas--hidden');
+  renderGraph(canvas, 'bar');
+  box
+    .querySelectorAll('.btn')
+    .forEach((btn) => btn.classList.remove('btn--active'));
+  box.querySelector('.btn--bar').classList.add('btn--active');
+  box.querySelector('.btn--percentage').classList.remove('btn--hidden');
+  box.querySelector('.btn--log').classList.remove('btn--hidden');
+  box.querySelector('.btn--donut').classList.add('btn--hidden');
+  box.querySelector('.btn--copy').classList.remove('btn--hidden');
 }
 
 // Render horizontal bar chart
-function handleHbarBtn() {
-  minitableEl.classList.add('minitable--hidden');
-  attributesChart = renderGraph(attributesCanvas, attributesChart, 'hbar');
-  graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  hbarBtn.classList.add('btn--active');
-  percentBtn.classList.remove('btn--hidden');
-  logBtn.classList.remove('btn--hidden');
-  donutBtn.classList.add('btn--hidden');
+function handleHbarBtn(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  box.querySelector('.minitable').classList.add('minitable--hidden');
+  canvas.classList.remove('canvas--hidden');
+  renderGraph(canvas, 'hbar');
+  box
+    .querySelectorAll('.btn')
+    .forEach((btn) => btn.classList.remove('btn--active'));
+  box.querySelector('.type .btn--hbar').classList.add('btn--active');
+  box.querySelector('.btn--percentage').classList.remove('btn--hidden');
+  box.querySelector('.btn--log').classList.remove('btn--hidden');
+  box.querySelector('.btn--donut').classList.add('btn--hidden');
+  box.querySelector('.btn--copy').classList.remove('btn--hidden');
 }
 
 // Render pie chart at attributes page
-function handlePieBtn() {
-  minitableEl.classList.add('minitable--hidden');
-  attributesChart = renderGraph(attributesCanvas, attributesChart, 'pie');
-  graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  pieBtn.classList.add('btn--active');
-  donutBtn.classList.remove('btn--hidden');
-  percentBtn.classList.remove('btn--hidden');
-  logBtn.classList.add('btn--hidden');
+function handlePieBtn(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  box.querySelector('.minitable').classList.add('minitable--hidden');
+  canvas.classList.remove('canvas--hidden');
+  renderGraph(canvas, 'pie');
+  box
+    .querySelectorAll('.btn')
+    .forEach((btn) => btn.classList.remove('btn--active'));
+  box.querySelector('.btn--pie').classList.add('btn--active');
+  box.querySelector('.btn--donut').classList.remove('btn--hidden');
+  box.querySelector('.btn--percentage').classList.remove('btn--hidden');
+  box.querySelector('.btn--log').classList.add('btn--hidden');
+  box.querySelector('.btn--copy').classList.remove('btn--hidden');
 }
 
 // Header for minitable of attributes
@@ -705,16 +883,23 @@ const minitableHeader = `<li class='minitable__header'>
 <div class='minitable__field'>Percentage</div></li>`;
 
 // Render minitable at attributes page
-function handleMinitableBtn() {
-  graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  minitableBtn.classList.add('btn--active');
-  graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  percentBtn.classList.add('btn--hidden');
-  logBtn.classList.add('btn--hidden');
-  donutBtn.classList.add('btn--hidden');
-  attributesChart.destroy();
-  attributesCanvas.classList.add('canvas--hidden');
-  const profile = profiles[attributesCanvas.dataset.attribute];
+function handleMinitableBtn(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+  box
+    .querySelectorAll('.btn')
+    .forEach((btn) => btn.classList.remove('btn--active'));
+  box.querySelector('.btn--minitable').classList.add('btn--active');
+  box.querySelector('.btn--percentage').classList.add('btn--hidden');
+  box.querySelector('.btn--log').classList.add('btn--hidden');
+  box.querySelector('.btn--donut').classList.add('btn--hidden');
+  box.querySelector('.btn--copy').classList.add('btn--hidden');
+  const chart = Chart.getChart(canvas);
+  if (chart) chart.destroy();
+  canvas.classList.add('canvas--hidden');
+  const profile = profiles[canvas.dataset.attribute];
   const rows = profile.categories.map(
     (cat, i) =>
       `<li class='minitable__row'>
@@ -724,6 +909,7 @@ function handleMinitableBtn() {
       </div>
       </li>`
   );
+  const minitableEl = box.querySelector('.minitable');
   minitableEl.innerHTML = minitableHeader + rows.join('\n');
   minitableEl.classList.remove('minitable--hidden');
 }
@@ -735,19 +921,25 @@ const missingsHeader = `<li class='minitable__header'>
 <div class='minitable__field'>Percentage</div></li>`;
 
 // Render missings table at attributes page
-function handleMissingsBtn() {
-  const profile = profiles[attributesCanvas.dataset.attribute];
+function handleMissingsBtn(index) {
+  const canvas = document.querySelector(
+    `.canvas--attributes[data-attribute="${index}"]`
+  );
+  const box = canvas.closest('.box');
+
+  const profile = profiles[canvas.dataset.attribute];
   if (profile.detected.length === 0) return;
 
-  graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  missingsBtn.classList.add('btn--active');
-  graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
-  percentBtn.classList.add('btn--hidden');
-  logBtn.classList.add('btn--hidden');
-  donutBtn.classList.add('btn--hidden');
-  attributesChart.destroy();
+  box
+    .querySelectorAll('.btn')
+    .forEach((btn) => btn.classList.remove('btn--active'));
+  box.querySelector('.btn--missings').classList.add('btn--active');
+  box.querySelector('.btn--percentage').classList.add('btn--hidden');
+  box.querySelector('.btn--log').classList.add('btn--hidden');
+  box.querySelector('.btn--donut').classList.add('btn--hidden');
+  box.querySelector('.btn--copy').classList.add('btn--hidden');
 
-  attributesCanvas.classList.add('canvas--hidden');
+  canvas.classList.add('canvas--hidden');
   const rows = profile.detected.map(
     (det, i) =>
       `<li class='minitable__row'>
@@ -761,6 +953,7 @@ function handleMissingsBtn() {
       </div>
       </li>`
   );
+  const minitableEl = box.querySelector('.minitable');
   minitableEl.innerHTML = missingsHeader + rows.join('\n');
   minitableEl.classList.remove('minitable--hidden');
 }
@@ -768,60 +961,116 @@ function handleMissingsBtn() {
 // Switch profiled attribute at attributes page
 function handleAttributesBtns(btn, i) {
   btn.addEventListener('click', () => {
-    attributeBtns.forEach((btn) => btn.classList.remove('btn--active'));
+    document
+      .querySelectorAll('.btn--attribute')
+      .forEach((btn) => btn.classList.remove('btn--active'));
     btn.classList.add('btn--active');
-    graphTypesBtns.forEach((btn) => btn.classList.remove('btn--active'));
-    barBtn.classList.add('btn--active');
-    graphOptionsBtns.forEach((btn) => btn.classList.remove('btn--active'));
-    percentBtn.classList.remove('btn--hidden');
-    logBtn.classList.remove('btn--hidden');
-    donutBtn.classList.add('btn--hidden');
+    document
+      .querySelectorAll('.attributes .type .btn')
+      .forEach((btn) => btn.classList.remove('btn--active'));
+    document
+      .querySelector('.attributes .btn--bar')
+      .classList.add('btn--active');
+    document
+      .querySelectorAll('.attributes .options .btn')
+      .forEach((btn) => btn.classList.remove('btn--active'));
+    document
+      .querySelector('.attributes .btn--percentage')
+      .classList.remove('btn--hidden');
+    document
+      .querySelector('.attributes .btn--log')
+      .classList.remove('btn--hidden');
+    document
+      .querySelector('.attributes .btn--donut')
+      .classList.add('btn--hidden');
+    document
+      .querySelector('.attributes .canvas')
+      .classList.remove('canvas--hidden');
     updateStats(profiles[i]);
-    minitableEl.classList.add('minitable--hidden');
+    document.querySelector('.minitable').classList.add('minitable--hidden');
+    const attributesCanvas = document.querySelector('.attributes .canvas');
+    const box = attributesCanvas.closest('.box--chart');
+    box
+      .querySelector('.btn--bar')
+      .addEventListener('click', () => handleBarBtn(i));
+    box
+      .querySelector('.btn--hbar')
+      .addEventListener('click', () => handleHbarBtn(i));
+    box
+      .querySelector('.btn--pie')
+      .addEventListener('click', () => handlePieBtn(i));
+    box
+      .querySelector('.btn--minitable')
+      .addEventListener('click', () => handleMinitableBtn(i));
+    box
+      .querySelector('.btn--missings')
+      .addEventListener('click', () => handleMissingsBtn(i));
+    box
+      .querySelector('.btn--percentage')
+      .addEventListener('click', () => togglePercentage(i));
+    box
+      .querySelector('.btn--log')
+      .addEventListener('click', () => toggleLogScale(i));
+    box
+      .querySelector('.btn--donut')
+      .addEventListener('click', () => toggleCutout(i));
+    box
+      .querySelector('.btn--sort')
+      .addEventListener('click', () => toggleSort(i));
+    box
+      .querySelector('.btn--reverse')
+      .addEventListener('click', () => toggleReverse(i));
     attributesCanvas.setAttribute('data-attribute', i);
-    attributesChart = renderGraph(attributesCanvas, attributesChart, 'bar');
+    renderGraph(attributesCanvas, 'bar');
   });
 }
 
 // Handle first attribute select at correlation page
 function handleSelectOne() {
-  const individualCorrelations = selectOne.value !== 'Overall Correlations';
+  const selectOne = document.querySelector('.correlations .select--one');
+  const individualCorrelations =
+    selectOne.value !== 'Cramers V' &&
+    selectOne.value !== 'Spearman Rank' &&
+    selectOne.value !== 'Theils U';
+  const selectTwo = document.querySelector('.correlations .select--two');
   selectTwo.classList.toggle('select--hidden', !individualCorrelations);
-  divider.classList.toggle('divider--hidden', !individualCorrelations);
+  document
+    .querySelector('.correlations .divider')
+    .classList.toggle('divider--hidden', !individualCorrelations);
 
   const newValue = individualCorrelations
     ? `${selectOne.value} x ${selectTwo.value}`
-    : 'Overall Correlations';
+    : selectOne.value;
 
-  matrixTitle.innerText = newValue;
+  document.querySelector('.correlations .box .heading-2').innerText = newValue;
+  const correlationsCanvas = document.querySelector('.canvas--correlations');
   correlationsCanvas.setAttribute('data-correlations', newValue);
-  correlationsChart = renderMatrix(correlationsCanvas, correlationsChart);
+  renderMatrix(correlationsCanvas);
 }
 
 // Handle second attribute select at correlation page
 function handleSelectTwo() {
-  const individualCorrelations = selectOne.value !== 'Overall Correlations';
+  const selectOne = document.querySelector('.correlations .select--one');
+  const selectTwo = document.querySelector('.correlations .select--two');
+  const individualCorrelations =
+    selectOne.value !== 'Cramers V' &&
+    selectOne.value !== 'Spearman Rank' &&
+    selectOne.value !== 'Theils U';
 
   const newValue = individualCorrelations
     ? `${selectOne.value} x ${selectTwo.value}`
-    : 'Overall Correlations';
+    : selectOne.value;
 
-  matrixTitle.innerText = newValue;
+  document.querySelector('.correlations .box .heading-2').innerText = newValue;
+  const correlationsCanvas = document.querySelector('.canvas--correlations');
   correlationsCanvas.setAttribute('data-correlations', newValue);
-  correlationsChart = renderMatrix(correlationsCanvas, correlationsChart);
+  renderMatrix(correlationsCanvas);
 }
 
 // Handle darkmode toggle
 function handleDarkmodeBtn() {
-  const sunIcon = `
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-  </svg>`;
-
-  const moonIcon = `
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-  <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-  </svg>`;
+  const sunIcon = `{% include './img/sun.svg' %}`;
+  const moonIcon = `{% include './img/moon.svg' %}`;
 
   const isLightMode = document.documentElement.classList.contains('light-mode');
 
@@ -836,8 +1085,366 @@ function handleDarkmodeBtn() {
   }
 
   updateChartJsConfig();
-  updateChartColors(attributesChart);
-  updateChartColors(correlationsChart);
+
+  document.querySelectorAll('canvas').forEach((canvas) => {
+    const chart = Chart.getChart(canvas);
+    if (chart) updateChartColors(chart);
+  });
+}
+
+// Calculate stats for a given profile
+function calculateStats(profile) {
+  const attributeName = profile.attribute;
+  const title = attributeName
+    .replaceAll('_', ' ')
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+  const missing = `${(+profile.missing).toLocaleString()} <span>(${(
+    (profile.missing /
+      (profile.counts.reduce((a, c) => a + c, 0) + profile.missing)) *
+    100
+  ).toFixed(2)}%)</span>`;
+  const categoriesCount = profile.categories.length.toLocaleString();
+
+  const maxIndex = profile.counts.indexOf(Math.max(...profile.counts));
+  const minIndex = profile.counts.indexOf(Math.min(...profile.counts));
+
+  const mostFrequent = `${
+    profile.categories[maxIndex]
+  } <span>(${profile.percentages[maxIndex].toFixed(2)}%)</span>`;
+  const leastFrequent = `${
+    profile.categories[minIndex]
+  } <span>(${profile.percentages[minIndex].toFixed(2)}%)</span>`;
+
+  return {
+    title,
+    missing,
+    categoriesCount,
+    mostFrequent,
+    leastFrequent,
+  };
+}
+
+// Handle print/interactive view toggle
+function handleToggleView() {
+  isPrintView = !isPrintView;
+
+  if (isPrintView) {
+    document.querySelector('.header').classList.add('header--sticky');
+    pages.forEach((pageEl) => pageEl.classList.add('page--active'));
+    toggleViewBtn.innerHTML = `{% include './img/interactive.svg' %}`;
+
+    const attributesContainer = document.querySelector('.attributes .content');
+    attributesContainer.innerHTML = '';
+
+    // Render attributes boxes
+    profiles.forEach((profile, index) => {
+      const { title, categoriesCount, mostFrequent, leastFrequent, missing } =
+        calculateStats(profile);
+      const boxHtml = `
+        <div class="box box--chart">
+          <div class="settings">
+            <h2 class="heading-2">${title}</h2>
+            <div class="type">
+              <button class="btn btn--icon btn--bar btn--active">{% include './img/bar.svg' %}</button>
+              <button class="btn btn--icon btn--hbar">{% include './img/hbar.svg' %}</button>
+              <button class="btn btn--icon btn--pie">{% include './img/pie.svg' %}</button>
+              <button class="btn btn--icon btn--minitable">{% include './img/table.svg' %}</button>
+              <button class="btn btn--icon btn--missings btn--hidden">{% include './img/error.svg' %}</button>
+            </div>
+            <div class="options">
+              <button class="btn btn--icon btn--copy" title="copy">{% include './img/copy.svg' %}</button>
+              <button class="btn btn--icon btn--percentage" title="percentage">{% include './img/percentage.svg' %}</button>
+              <button class="btn btn--icon btn--log" title="logarithmic scale">{% include './img/log.svg' %}</button>
+              <button class="btn btn--icon btn--donut btn--hidden" title="donut">{% include './img/donut.svg' %}</button>
+              <button class="btn btn--icon btn--sort" title="sort">{% include './img/sort.svg' %}</button>
+              <button class="btn btn--icon btn--reverse" title="reverse">{% include './img/reverse.svg' %}</button>
+            </div>
+          </div>
+          <div class="print">
+            <div class="stats--print">
+              <div class="box stats">
+                <div class="stats__icon stats__icon--categories">{% include './img/categories.svg' %}</div>
+                <h5 class="stats__label">Categories</h5>
+                <p class="stats__value stats__value--categories">
+                  ${categoriesCount}
+                </p>
+              </div>
+              <div class="box stats">
+                <div class="stats__icon stats__icon--most">{% include './img/most.svg' %}</div>
+                <h5 class="stats__label">Most Frequent</h5>
+                <p class="stats__value stats__value--most">
+                  ${mostFrequent}
+                </p>
+              </div>
+              <div class="box stats">
+                <div class="stats__icon stats__icon--least">{% include './img/least.svg' %}</div>
+                <h5 class="stats__label">Least Frequent</h5>
+                <p class="stats__value stats__value--least">
+                  ${leastFrequent}
+                </p>
+              </div>
+              <div class="box stats">
+                <div class="stats__icon stats__icon--missing">{% include './img/missing.svg' %}</div>
+                <h5 class="stats__label">Missing values</h5>
+                <p class="stats__value stats__value--missing">
+                  ${missing}
+                </p>
+              </div>
+            </div>
+            <div class="graph">
+              <div style="max-width: 900px; max-height: 500px;">
+                <canvas class="canvas canvas--attributes" data-attribute="${index}"></canvas>
+              </div>
+              <ul class="minitable minitable--hidden"></ul>
+            </div>
+          </div>
+        </div>
+      `;
+      attributesContainer.insertAdjacentHTML('beforeend', boxHtml);
+
+      // Render chart
+      const canvas = document.querySelector(
+        `.canvas--attributes[data-attribute="${index}"]`
+      );
+      renderGraph(canvas, 'bar');
+
+      // Add event listeners to buttons
+      const box = canvas.closest('.box--chart');
+      box
+        .querySelector('.btn--bar')
+        .addEventListener('click', () => handleBarBtn(index));
+      box
+        .querySelector('.btn--hbar')
+        .addEventListener('click', () => handleHbarBtn(index));
+      box
+        .querySelector('.btn--pie')
+        .addEventListener('click', () => handlePieBtn(index));
+      box
+        .querySelector('.btn--minitable')
+        .addEventListener('click', () => handleMinitableBtn(index));
+      box
+        .querySelector('.btn--missings')
+        .addEventListener('click', () => handleMissingsBtn(index));
+      box
+        .querySelector('.btn--copy')
+        .addEventListener('click', () =>
+          copyChartToClipboard(box.querySelector('.btn--copy'))
+        );
+      box
+        .querySelector('.btn--percentage')
+        .addEventListener('click', () => togglePercentage(index));
+      box
+        .querySelector('.btn--log')
+        .addEventListener('click', () => toggleLogScale(index));
+      box
+        .querySelector('.btn--donut')
+        .addEventListener('click', () => toggleCutout(index));
+      box
+        .querySelector('.btn--sort')
+        .addEventListener('click', () => toggleSort(index));
+      box
+        .querySelector('.btn--reverse')
+        .addEventListener('click', () => toggleReverse(index));
+    });
+
+    // Render overall correlations charts
+    const renderOverallCorrelationChart = (correlationType) => {
+      const overallHtml = `
+        <div class="box box--chart">
+          <div class="settings">
+            <h2 class="heading-2">${correlationType}</h2>
+          </div>
+          <div class="graph">
+            <div style="max-width: 900px; max-height: 500px;">
+              <canvas class="canvas canvas--correlations" data-correlations="${correlationType}"></canvas>
+            </div>
+          </div>
+        </div>
+      `;
+      correlationsPrintContainer.insertAdjacentHTML('beforeend', overallHtml);
+      const overallCanvas = document.querySelector(
+        `.correlations--print .canvas--correlations[data-correlations="${correlationType}"]`
+      );
+      renderMatrix(overallCanvas);
+    };
+
+    // Render correlations charts
+    const correlationsContent = document.querySelector(
+      '.correlations .content'
+    );
+    correlationsContent.classList.add('content--hidden');
+
+    const correlationsPrintContainer = document.createElement('div');
+    correlationsPrintContainer.classList.add('correlations--print');
+    document
+      .querySelector('.correlations')
+      .appendChild(correlationsPrintContainer);
+
+    // Render Cramers V, Spearman Rank, and Theil's U correlations charts
+    ['Cramers V', 'Spearman Rank', 'Theils U'].forEach(
+      renderOverallCorrelationChart
+    );
+
+    // Render individual correlations charts
+    profiles.forEach((profile1) => {
+      profiles.forEach((profile2) => {
+        if (profile1.attribute !== profile2.attribute) {
+          const correlationHtml = `
+            <div class="box box--chart">
+              <div class="settings">
+                <h2 class="heading-2">${profile1.attribute} x ${profile2.attribute}</h2>
+              </div>
+              <div class="graph">
+                <div style="max-width: 900px; max-height: 500px;">
+                  <canvas class="canvas canvas--correlations" data-correlations="${profile1.attribute} x ${profile2.attribute}"></canvas>
+                </div>
+              </div>
+            </div>
+          `;
+          correlationsPrintContainer.insertAdjacentHTML(
+            'beforeend',
+            correlationHtml
+          );
+          const correlationCanvas = document.querySelector(
+            `.canvas--correlations[data-correlations="${profile1.attribute} x ${profile2.attribute}"]`
+          );
+          renderMatrix(correlationCanvas);
+        }
+      });
+    });
+
+    updateActiveNav();
+  } else {
+    pages.forEach((pageEl) => pageEl.classList.remove('page--active'));
+    toggleViewBtn.innerHTML = `{% include './img/print.svg' %}`;
+
+    const { title, categoriesCount, mostFrequent, leastFrequent, missing } =
+      calculateStats(profiles[0]);
+
+    document.querySelector('.attributes .content').innerHTML = `
+          <div class="scrollbar scrollable-tabs-container">
+            <div class="scrollbar__arrow scrollbar__arrow--left">
+              {% include './img/left.svg' %}
+            </div>
+            <ul class="scrollbar__chips">
+              {% for profile in attribute_profiles %}
+              <li class="scrollbar__chip">
+                <button class="btn btn--chip btn--attribute">
+                  {{profile['attribute']}}
+                </button>
+              </li>
+              {% endfor %}
+            </ul>
+            <div class="scrollbar__arrow scrollbar__arrow--right">
+              {% include './img/right.svg' %}
+            </div>
+          </div>
+          <div class="box stats">
+            <div class="stats__icon stats__icon--categories">
+              {% include './img/categories.svg' %}
+            </div>
+            <h5 class="stats__label">Categories</h5>
+            <p class="stats__value stats__value--categories">${categoriesCount}</p>
+          </div>
+          <div class="box stats">
+            <div class="stats__icon stats__icon--most">
+              {% include './img/most.svg' %}
+            </div>
+            <h5 class="stats__label">Most Frequent</h5>
+            <p class="stats__value stats__value--most">${mostFrequent}</p>
+          </div>
+          <div class="box stats">
+            <div class="stats__icon stats__icon--least">
+              {% include './img/least.svg' %}
+            </div>
+            <h5 class="stats__label">Least Frequent</h5>
+            <p class="stats__value stats__value--least">${leastFrequent}</p>
+          </div>
+          <div class="box stats">
+            <div class="stats__icon stats__icon--missing">
+              {% include './img/missing.svg' %}
+            </div>
+            <h5 class="stats__label">Missing values</h5>
+            <p class="stats__value stats__value--missing">${missing}</p>
+          </div>
+          <div class="box box--chart">
+            <div class="settings">
+              <h2 class="heading-2">${title}</h2>
+              <div class="type">
+                <button class="btn btn--icon btn--bar btn--active">
+                  {% include './img/bar.svg' %}
+                </button>
+                <button class="btn btn--icon btn--hbar">
+                  {% include './img/hbar.svg' %}
+                </button>
+                <button class="btn btn--icon btn--pie">
+                  {% include './img/pie.svg' %}
+                </button>
+                <button class="btn btn--icon btn--minitable">
+                  {% include './img/table.svg' %}
+                </button>
+                <button class="btn btn--icon btn--missings btn--hidden">
+                  {% include './img/error.svg' %}
+                </button>
+              </div>
+              <div class="options">
+                <button
+                  class="btn btn--icon btn--percentage"
+                  title="percentage"
+                >
+                  {% include './img/percentage.svg' %}
+                </button>
+                <button
+                  class="btn btn--icon btn--log"
+                  title="logarithmic scale"
+                >
+                  {% include './img/log.svg' %}
+                </button>
+                <button
+                  class="btn btn--icon btn--donut btn--hidden"
+                  title="donut"
+                >
+                  {% include './img/donut.svg' %}
+                </button>
+                <button class="btn btn--icon btn--sort" title="sort">
+                  {% include './img/sort.svg' %}
+                </button>
+                <button class="btn btn--icon btn--reverse" title="reverse">
+                  {% include './img/reverse.svg' %}
+                </button>
+              </div>
+            </div>
+            <div class="graph">
+              <div style="max-width: 900px; max-height: 500px">
+                <canvas
+                  class="canvas canvas--attributes"
+                  data-attribute="0"
+                ></canvas>
+              </div>
+              <ul class="minitable minitable--hidden"></ul>
+            </div>
+          </div>`;
+
+    document
+      .querySelectorAll('.btn--attribute')
+      .forEach((btn, i) => handleAttributesBtns(btn, i));
+
+    const correlationsPrintContainer = document.querySelector(
+      '.correlations--print'
+    );
+    if (correlationsPrintContainer) {
+      correlationsPrintContainer.remove();
+    }
+    const correlationsContent = document.querySelector(
+      '.correlations .content'
+    );
+    correlationsContent.classList.remove('content--hidden');
+
+    loadReport();
+  }
 }
 
 ///////////////////////////////////////////////
@@ -848,63 +1455,69 @@ summaryNav.addEventListener('click', () => displayPage('summary'));
 attributesNav.addEventListener('click', () => displayPage('attributes'));
 correlationsNav.addEventListener('click', () => displayPage('correlations'));
 
-/* Graph Types Buttons */
-barBtn.addEventListener('click', () => handleBarBtn());
-hbarBtn.addEventListener('click', () => handleHbarBtn());
-pieBtn.addEventListener('click', () => handlePieBtn());
-minitableBtn.addEventListener('click', () => handleMinitableBtn());
-missingsBtn.addEventListener('click', () => handleMissingsBtn());
-missingStatBtn.addEventListener('click', () => handleMissingsBtn());
+function initEventHandlers() {
+  /* Scrollbar - Attributes Buttons */
+  document
+    .querySelectorAll('.btn--attribute')
+    .forEach((btn, i) => handleAttributesBtns(btn, i));
 
-/* Graph Options Buttons */
-percentBtn.addEventListener('click', () => togglePercentage(attributesChart));
-logBtn.addEventListener('click', () => toggleLogScale(attributesChart));
-donutBtn.addEventListener('click', () => toggleCutout(attributesChart));
-sortBtn.addEventListener('click', () => toggleSort(attributesChart));
-reverseBtn.addEventListener('click', () => toggleReverse(attributesChart));
+  /* Scrollbar - Scrolling */
+  document
+    .querySelector('.scrollbar__arrow--right svg')
+    .addEventListener('click', () => {
+      document.querySelector('.scrollbar__chips').scrollLeft += 200;
+      updateScrollbarIcons();
+    });
 
-/* Scrollbar - Attributes Buttons */
-attributeBtns.forEach((btn, i) => handleAttributesBtns(btn, i));
+  document
+    .querySelector('.scrollbar__arrow--left svg')
+    .addEventListener('click', () => {
+      document.querySelector('.scrollbar__chips').scrollLeft -= 200;
+      updateScrollbarIcons();
+    });
 
-/* Scrollbar - Scrolling */
-rightArrowIcon.addEventListener('click', () => {
-  chipsList.scrollLeft += 200;
-  updateScrollbarIcons();
-});
+  const chipsList = document.querySelector('.scrollbar__chips');
 
-leftArrowIcon.addEventListener('click', () => {
-  chipsList.scrollLeft -= 200;
-  updateScrollbarIcons();
-});
+  chipsList.addEventListener('scroll', updateScrollbarIcons);
 
-chipsList.addEventListener('scroll', updateScrollbarIcons);
+  chipsList.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    chipsList.scrollLeft += e.deltaY * 2.5;
+    updateScrollbarIcons();
+  });
 
-chipsList.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  chipsList.scrollLeft += e.deltaY * 2.5;
-  updateScrollbarIcons();
-});
+  chipsList.addEventListener('mousedown', () => {
+    isDragging = true;
+  });
 
-chipsList.addEventListener('mousedown', () => {
-  isDragging = true;
-});
+  chipsList.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    chipsList.classList.add('scrollbar__chips--dragging');
+    chipsList.scrollBy(-e.movementX, 0);
+  });
 
-chipsList.addEventListener('mousemove', (e) => {
-  if (!isDragging) return;
-  chipsList.classList.add('scrollbar__chips--dragging');
-  chipsList.scrollBy(-e.movementX, 0);
-});
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    chipsList.classList.remove('scrollbar__chips--dragging');
+  });
 
-document.addEventListener('mouseup', () => {
-  isDragging = false;
-  chipsList.classList.remove('scrollbar__chips--dragging');
-});
+  window.addEventListener('resize', updateScrollbarIcons);
 
-window.addEventListener('resize', updateScrollbarIcons);
+  /* Select first/second attribute of correlation matrix */
+  document
+    .querySelector('.correlations .select--one')
+    .addEventListener('change', handleSelectOne);
+  document
+    .querySelector('.correlations .select--two')
+    .addEventListener('change', handleSelectTwo);
 
-/* Select first/second attribute of correlation matrix */
-selectOne.addEventListener('change', () => handleSelectOne());
-selectTwo.addEventListener('change', () => handleSelectTwo());
+  /* Copy chart to clipboard */
+  document.querySelectorAll('.btn--copy').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      copyChartToClipboard(btn);
+    });
+  });
+}
 
 /* Opening modals */
 if (excludedBtn) {
@@ -929,17 +1542,17 @@ document.addEventListener('keydown', function (e) {
 });
 
 /* Darkmode Button */
-darkmodeBtn.addEventListener('click', () => handleDarkmodeBtn());
+darkmodeBtn.addEventListener('click', handleDarkmodeBtn);
 
-/* Check if array contains only numbers */
-function isArrayOfNumbers(array) {
-  return array.every((item) => typeof item === 'number');
-}
+/* Print or interactive view button */
+toggleViewBtn.addEventListener('click', handleToggleView);
 
 ///////////////////////////////////////////////
 // INITIALIZATION
 
+initEventHandlers();
 updateChartJsConfig();
 loadReport();
 formatSummaryStats();
 updateScrollbarIcons();
+updateActiveNav();

@@ -108,6 +108,7 @@
 html {
   box-sizing: border-box;
   font-size: 62.5%;
+  scroll-padding-top: 5.2rem;
 }
 
 body {
@@ -255,6 +256,24 @@ h6 {
 .btn--darkmode:hover svg {
   fill: transparent;
 }
+.btn--print {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  margin: 5px 1px;
+  border-radius: var(--border-radius-sm);
+}
+.btn--print svg {
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--color-brand-dark);
+}
+.btn--print:hover {
+  background-color: transparent;
+}
+.btn--print:hover svg {
+  fill: transparent;
+}
 .btn--hidden {
   display: none;
 }
@@ -355,6 +374,13 @@ h6 {
   .stats {
     grid-column: span 2;
   }
+}
+.stats--print {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto auto;
+  gap: 1.4rem;
+  margin: 1.4rem;
 }
 .stats__label {
   align-self: end;
@@ -561,6 +587,13 @@ h6 {
   align-items: center;
   width: 100%;
   gap: 1rem;
+  z-index: 50;
+  padding: 0.5rem;
+  background: linear-gradient(to bottom, var(--color-grey-50) 95%, transparent);
+}
+.header--sticky {
+  position: sticky;
+  top: 0;
 }
 
 .title {
@@ -596,6 +629,11 @@ h6 {
 }
 
 .summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.summary .content {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   grid-template-rows: auto auto auto;
@@ -663,9 +701,21 @@ h6 {
 }
 
 .attributes {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.attributes .content {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   grid-template-rows: auto auto auto;
+}
+.attributes .print {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22.55rem 1fr;
+  column-gap: 1rem;
+  margin-right: 1.4rem;
 }
 .attributes .scrollbar {
   grid-column: 1/-1;
@@ -707,13 +757,26 @@ h6 {
   }
 }
 .attributes .canvas--hidden {
-  display: none;
+  display: none !important;
 }
 
 .correlations {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.correlations--print {
+  display: flex;
+  flex-direction: column;
+  gap: 2.4rem;
+}
+.correlations .content {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   grid-template-rows: auto auto auto;
+}
+.correlations .content--hidden {
+  display: none !important;
 }
 .correlations .selects {
   display: flex;
@@ -771,7 +834,7 @@ h6 {
 .app {
   background-color: var(--color-grey-50);
   padding: 4rem;
-  height: 100vh;
+  min-height: 100vh;
   max-width: 120rem;
   margin: 0 auto;
   display: flex;
@@ -793,18 +856,23 @@ h6 {
 
 .page {
   display: none;
+  flex-direction: column;
+  gap: 1.8rem;
+}
+.page .content {
+  display: grid;
   gap: 2.4rem;
 }
 @media only screen and (max-width: 37.5em) {
-  .page {
+  .page .content {
     gap: 1.8rem;
   }
 }
 @media only screen and (max-width: 31.25em) {
-  .page {
+  .page .content {
     gap: 1.4rem;
   }
 }
 .page--active {
-  display: grid;
+  display: flex;
 }

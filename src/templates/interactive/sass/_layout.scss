@@ -1,7 +1,7 @@
 .app {
   background-color: var(--color-grey-50);
   padding: 4rem;
-  height: 100vh;
+  min-height: 100vh;
   max-width: 120rem;
   margin: 0 auto;
   display: flex;
@@ -21,17 +21,23 @@
 
 .page {
   display: none;
-  gap: 2.4rem;
+  flex-direction: column;
+  gap: 1.8rem;
 
-  @media only screen and (max-width: $bp-small) {
-    gap: 1.8rem;
-  }
+  .content {
+    display: grid;
+    gap: 2.4rem;
 
-  @media only screen and (max-width: $bp-smallest) {
-    gap: 1.4rem;
+    @media only screen and (max-width: $bp-small) {
+      gap: 1.8rem;
+    }
+
+    @media only screen and (max-width: $bp-smallest) {
+      gap: 1.4rem;
+    }
   }
 
   &--active {
-    display: grid;
+    display: flex;
   }
 }
