@@ -40,7 +40,7 @@ class pandas_cat:
         :param opts: options
 
         Options inlude:
-            * **auto_prepare** - set whether to apply automatic dataframe preparation (default = False)
+            * **auto_prepare** - set whether to apply automatic dataframe preparation (default = True)
             * **cat_limit** - limit number of categories to profile (default=20)
             * **na_values** - array of additional custom values that should be detected as missing
             * **na_ignore** - array of values (from default list) that should not be detected as missings

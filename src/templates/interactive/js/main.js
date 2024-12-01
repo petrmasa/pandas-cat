@@ -492,10 +492,21 @@ async function copyChartToClipboard(button) {
     const item = new ClipboardItem({ 'image/png': blob });
     await navigator.clipboard.write([item]);
     canvas.style.backgroundColor = originalBackgroundColor;
+    showToast('Chart copied to clipboard!');
   } catch (err) {
     console.error('Failed to copy chart: ', err);
     alert('Failed to copy chart!');
   }
+}
+
+// Show toast notification
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.innerText = message;
+  toast.classList.add('toast--visible');
+  setTimeout(() => {
+    toast.classList.remove('toast--visible');
+  }, 3000);
 }
 
 // Render correlations matrix
@@ -731,7 +742,7 @@ function updateChartJsConfig() {
   ];
 }
 
-// Update chart colors for lightmode or darkmode
+// Update chart colors for darkmode or lightmode
 function updateChartColors(chart) {
   if (!chart) return;
 
@@ -758,16 +769,32 @@ function updateChartColors(chart) {
       ...chart.data.datasets[0].data.map((corr) => corr.v)
     );
 
-    const styles = getComputedStyle(document.documentElement);
-    const chartColor = styles.getPropertyValue('--color-two');
+    const chartColorPositive = styles.getPropertyValue('--color-two');
+    const chartColorNegative = styles.getPropertyValue('--color-one');
 
     chart.data.datasets[0].backgroundColor = (context) => {
+      const value = context.dataset.data[context.dataIndex].v;
       const transparency =
-        context.dataset.data[context.dataIndex].v / maxCorrelation;
-      return changeTransparency(chartColor, transparency);
+        Math.abs(value) /
+        (chart.options.plugins.tooltip.callbacks.label === 'Spearman Rank'
+          ? 1
+          : maxCorrelation);
+      return value < 0
+        ? changeTransparency(chartColorNegative, transparency)
+        : changeTransparency(chartColorPositive, transparency);
     };
 
-    chart.config.plugins[0] = colorScaleLegend(0, maxCorrelation, chartColor);
+    chart.config.plugins[0] = colorScaleLegend(
+      chart.options.plugins.tooltip.callbacks.label === 'Spearman Rank'
+        ? -1
+        : 0,
+      chart.options.plugins.tooltip.callbacks.label === 'Spearman Rank'
+        ? 1
+        : maxCorrelation,
+      chartColorPositive,
+      chartColorNegative,
+      chart.options.plugins.tooltip.callbacks.label
+    );
   }
 
   if (chartType === 'pie') {
@@ -1227,6 +1254,9 @@ function handleToggleView() {
         .addEventListener('click', () => handleMinitableBtn(index));
       box
         .querySelector('.btn--missings')
+        .addEventListener('click', () => handleMissingsBtn(index));
+      box
+        .querySelector('.stats:has(.stats__icon--missing)')
         .addEventListener('click', () => handleMissingsBtn(index));
       box
         .querySelector('.btn--copy')

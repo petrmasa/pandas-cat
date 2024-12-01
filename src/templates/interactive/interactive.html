@@ -347,12 +347,20 @@
         <button class="modal__close">&times;</button>
         <h3 class="heading-3">Cramer's V</h3>
         <p class="modal__text">
-          Cramer's V values range from 0 to 1, with 0 indicating no association
-          and 1 indicating a full association between attributes.
+          Cramer's V values range from 0 (no association) to 1 (full
+          association), it is based on a nominal variation of Pearson's
+          Chi-Square Test and is symmetrical.
         </p>
+        <h3 class="heading-3">Spearman's Rank</h3>
         <p class="modal__text">
-          Cramer's V is based on a nominal variation of Pearson's Chi-Square
-          Test and is symmetrical.
+          Spearman's Rank Correlation values range from -1 (perfect negative
+          association) to 1 (perfect positive association).
+        </p>
+        <h3 class="heading-3">Theil's U</h3>
+        <p class="modal__text">
+          Theil's U (Uncertainty Coefficient) quantifies the level of
+          uncertainty reduction in one variable given knowledge of another. It
+          is asymmetrical.
         </p>
         <h3 class="heading-3">Individual Correlations</h3>
         <p class="modal__text">
@@ -362,5 +370,7 @@
       </div>
       <div class="overlay overlay--hidden"></div>
     </div>
+    <!-- TOAST POPUP -->
+    <div id="toast" class="toast">Alert!</div>
   </body>
 </html>
