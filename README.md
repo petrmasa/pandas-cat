@@ -95,4 +95,5 @@ The dataset is downloaded from the web (each time you run the code). If you want
 ## Credits
 
 Petr Masa - Base package, basic data preparation
+
 Jan Nejedly - Interactive report, handling missing values
