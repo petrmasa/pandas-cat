@@ -41,22 +41,6 @@ You can install the package using
 
 `pip install pandas-cat`
 
-## Beta Installation - New Interactive Template
-
-The enhanced `pandas-cat` version is not yet available via `pip install`.  
-To test the interactive template, please follow these steps:
-
-1. Clone the entire repository: `git clone`.
-2. Open the project in VS Code.
-3. Switch to the `interactive_report` branch.
-4. Install the [Jupyter extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.jupyter).
-5. Create a Jupyter Notebook file.
-6. Import the package manually:
-
-   ```python
-   from src.pandas_cat import pandas_cat
-   ```
-
 ## Usage
 
 To load your dataset into a Pandas DataFrame, you can use the `read_csv()` method for CSV files or the `read_excel()` method for Excel files. Both methods support a parameter called `keep_default_na`, which you can set to `False`. This prevents Pandas from detecting missing values, as `pandas-cat` offers a much more comprehensive detection system, including all the values Pandas detects. For faster report generation, you can select specific columns for analysis by filtering them directly in Pandas.
@@ -73,6 +57,9 @@ df = pd.read_csv('https://petrmasa.com/pandas-cat/data/accidents.zip',
 
 # Use only selected columns
 df = df[['Driver_Age_Band', 'Driver_IMD', 'Sex', 'Journey']]
+
+#For longer demo report uses this set of columns instead of the first one
+#df=df[['Driver_Age_Band','Driver_IMD','Sex','Journey','Hit_Objects_in','Hit_Objects_off','Casualties','Severity','Area','Vehicle_Age','Road_Type','Speed_limit','Light','Vehicle_Location','Vehicle_Type']]
 
 # Generate a profile report with the default template
 pandas_cat.profile(df=df, dataset_name="Accidents", opts={"auto_prepare": True})
@@ -104,3 +91,8 @@ Sample reports are here - [basic](https://petrmasa.com/pandas-cat/sample/report1
 Sample report of the new interactive template is available [here](https://pandas-cat-preview.netlify.app/#summary).
 
 The dataset is downloaded from the web (each time you run the code). If you want, you can download sample dataset [here](https://petrmasa.com/pandas-cat/data/accidents.zip) and store it locally.
+
+## Credits
+
+Petr Masa - Base package, basic data preparation
+Jan Nejedly - Interactive report, handling missing values
