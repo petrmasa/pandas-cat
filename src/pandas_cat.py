@@ -30,7 +30,7 @@ class pandas_cat:
     Pandas categorical profiling. Creates html report with profile of categorical dataset. Provides also other useful functions.
     """
 
-    version_string = "0.1.1"
+    version_string = "0.1.2"
     template_name = "default_0_1_0.tem"
 
     def __init(self):
@@ -415,7 +415,7 @@ class pandas_cat:
             return '{0:.2f} TB'.format(B / TB)
 
     @staticmethod
-    def prepare(df:pandas.DataFrame=None,opts:dict=None):
+    def prepare(df:pandas.DataFrame=None,opts:dict=None,auto_data_prep='CLM'):
         """
         Prepares a categorical dataset. Takes strings, integers etc. variables and if possible, converts it do
         pandas categorical and ordered by their natural value
@@ -424,8 +424,8 @@ class pandas_cat:
 
 
         """
-        #currently we are using CleverMiner's data preparation
-        #we plan to create this package independent on CleverMiner package and move these routines from CleverMiner to this package
+        #currently we are moving CleverMiner's data preparation to here, default for now remains CleverMiner's data preparation
+        #we plan to create this package independent on CleverMiner package and make this as a master for data preparation
 
 
         my_df=df
@@ -433,8 +433,80 @@ class pandas_cat:
         if opts2 is None:
             opts2 = {}
         opts2['keep_df'] = True
-        clm = cleverminer(df=my_df, opts=opts2)
-        if cleverminer.version_string < '1.0.7':
-            return my_df
-        return clm.df
+        if auto_data_prep=='CLM':
+            clm = cleverminer(df=my_df, opts=opts2)
+            if cleverminer.version_string < '1.0.7':
+                return my_df
+            return clm.df
+        else:
+            return pandascat._automatic_data_conversions(df)
+
+
+
+    def _automatic_data_conversions(df:pandas.DataFrame=None):
+        self=pandas_cat
+        print("Automatically reordering numeric categories ...")
+        for i in range(len(df.columns)):
+            if self.verbosity['debug']:
+                print(f"#{i}: {df.columns[i]} : {df.dtypes[i]}.")
+            try:
+                df[df.columns[i]] = df[df.columns[i]].astype(str).astype(float)
+                if self.verbosity['debug']:
+                    print(f"CONVERTED TO FLOATS #{i}: {df.columns[i]} : {df.dtypes[i]}.")
+                lst2 = pd.unique(df[df.columns[i]])
+                is_int = True
+                for val in lst2:
+                    if val % 1 != 0:
+                        is_int = False
+                if is_int:
+                    df[df.columns[i]] = df[df.columns[i]].astype(int)
+                    if self.verbosity['debug']:
+                        print(f"CONVERTED TO INT #{i}: {df.columns[i]} : {df.dtypes[i]}.")
+                lst3 = pd.unique(df[df.columns[i]])
+                cat_type = CategoricalDtype(categories=lst3.sort(), ordered=True)
+                df[df.columns[i]] = df[df.columns[i]].astype(cat_type)
+                if self.verbosity['debug']:
+                    print(f"CONVERTED TO CATEGORY #{i}: {df.columns[i]} : {df.dtypes[i]}.")
+
+            except:
+                if self.verbosity['debug']:
+                    print("...cannot be converted to int")
+                try:
+                    values = df[df.columns[i]].unique()
+                    if self.verbosity['debug']:
+                        print(f"Values: {values}")
+                    is_ok = True
+                    extracted = []
+                    for val in values:
+                        #                        print(f"...will process {val}")
+                        #                        res = re.findall(r"[-+]?(?:\d*\.*\d+)", val)
+                        res = re.findall(r"-?\d+", val)
+                        #                        print(f"...found {res}")
+                        if len(res) > 0:
+                            extracted.append(int(res[0]))
+                        else:
+                            is_ok = False
+                    if self.verbosity['debug']:
+                        print(f"Is ok: {is_ok}, extracted {extracted}")
+                    if is_ok:
+                        extracted_sorted = copy.deepcopy(extracted)
+                        extracted_sorted.sort()
+                        #                       print(f"DBG1: {extracted_sorted}, {extracted}")
+                        sorted_list = []
+                        for nb in extracted_sorted:
+                            idx = extracted.index(nb)
+                            #                            print(f"DBG2 {nb} - idx = {idx}")
+                            sorted_list.append(values[idx])
+                        if self.verbosity['debug']:
+                            print(f"Sorted list: {sorted_list}")
+                        cat_type = CategoricalDtype(categories=sorted_list, ordered=True)
+                        df[df.columns[i]] = df[df.columns[i]].astype(cat_type)
+
+
+                except:
+                    if self.verbosity['debug']:
+                        print("...cannot extract numbers from all categories")
+
+        print("Automatically reordering numeric categories ...done")
+        return df
 
