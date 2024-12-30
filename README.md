@@ -58,8 +58,8 @@ df = pd.read_csv('https://petrmasa.com/pandas-cat/data/accidents.zip',
 # Use only selected columns
 df = df[['Driver_Age_Band', 'Driver_IMD', 'Sex', 'Journey']]
 
-#For longer demo report uses this set of columns instead of the first one
-#df=df[['Driver_Age_Band','Driver_IMD','Sex','Journey','Hit_Objects_in','Hit_Objects_off','Casualties','Severity','Area','Vehicle_Age','Road_Type','Speed_limit','Light','Vehicle_Location','Vehicle_Type']]
+# For longer demo report use this set of columns instead of the first one
+df = df[['Driver_Age_Band','Driver_IMD','Sex','Journey','Hit_Objects_in','Hit_Objects_off','Casualties','Severity','Area','Vehicle_Age','Road_Type','Speed_limit','Light','Vehicle_Location','Vehicle_Type']]
 
 # Generate a profile report with the default template
 pandas_cat.profile(df=df, dataset_name="Accidents", opts={"auto_prepare": True})
