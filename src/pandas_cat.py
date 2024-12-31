@@ -22,7 +22,7 @@ class pandas_cat:
     """
 
     version_string = "0.1.3"
-    template_name = "default_0_1_0.tem"
+    template_name = "default_0_1_3.tem"
 
     def __init__(self):
         """
@@ -127,6 +127,8 @@ class pandas_cat:
                     # Calculate Spearman rank correlation
                     spearman_corr, _ = ss.spearmanr(
                         col_one, col_two, nan_policy='omit')
+                    if spearman_corr != spearman_corr:  # replace NaN with 0
+                        spearman_corr = 0
                     spearman_corr = round(float(spearman_corr), 3)
                     entry_spearman = {"x": column_one,
                                       "y": column_two, "v": spearman_corr}

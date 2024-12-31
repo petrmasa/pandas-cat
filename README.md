@@ -58,8 +58,8 @@ df = pd.read_csv('https://petrmasa.com/pandas-cat/data/accidents.zip',
 # Use only selected columns
 df = df[['Driver_Age_Band', 'Driver_IMD', 'Sex', 'Journey']]
 
-#For longer demo report uses this set of columns instead of the first one
-#df=df[['Driver_Age_Band','Driver_IMD','Sex','Journey','Hit_Objects_in','Hit_Objects_off','Casualties','Severity','Area','Vehicle_Age','Road_Type','Speed_limit','Light','Vehicle_Location','Vehicle_Type']]
+# For longer demo report use this set of columns instead of the first one
+df = df[['Driver_Age_Band','Driver_IMD','Sex','Journey','Hit_Objects_in','Hit_Objects_off','Casualties','Severity','Area','Vehicle_Age','Road_Type','Speed_limit','Light','Vehicle_Location','Vehicle_Type']]
 
 # Generate a profile report with the default template
 pandas_cat.profile(df=df, dataset_name="Accidents", opts={"auto_prepare": True})
@@ -88,7 +88,7 @@ df = pandas_cat.prepare(df)
 ## Data and sample reports
 
 Sample reports are here - [basic](https://petrmasa.com/pandas-cat/sample/report1.html) and [longer](https://petrmasa.com/pandas-cat/sample/report2.html).
-Sample report of the new interactive template is available [here](https://pandas-cat-preview.netlify.app/#summary).
+Sample report of the new interactive template (credit goes to Jan Nejedly) is available [here](https://petrmasa.com/pandas-cat/sample/interactive.html).
 
 The dataset is downloaded from the web (each time you run the code). If you want, you can download sample dataset [here](https://petrmasa.com/pandas-cat/data/accidents.zip) and store it locally.
 
