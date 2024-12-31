@@ -27,20 +27,11 @@ const summaryPage = document.querySelector('.summary');
 const attributesPage = document.querySelector('.attributes');
 const correlationsPage = document.querySelector('.correlations');
 
-/* Summary Page - Stats */
+/* Summary Page */
 const totalAttributesStat = document.querySelector('.stats__value--attributes');
 const totalRecordsStat = document.querySelector('.stats__value--records');
 const totalMissStat = document.querySelector('.stats__value--miss');
 const missingBtn = document.querySelector('.stats:has(.stats__value--miss)');
-
-/* Attributes Page - Statistics */
-const categoriesCountStat = document.querySelector('.stats__value--categories');
-const mostFrequentStat = document.querySelector('.stats__value--most');
-const leastFrequentStat = document.querySelector('.stats__value--least');
-const missingStat = document.querySelector('.stats__value--missing');
-const missingStatBtn = document.querySelector(
-  '.stats:has(.stats__value--missing)'
-);
 
 /* Modals */
 const helpBtn = document.querySelector('.correlations .btn--help');
@@ -186,20 +177,23 @@ function updateStats(profile) {
     .join(' ');
   document.querySelector('.box--chart .heading-2').innerText = title;
 
-  missingStat.innerHTML = `${(+profile.missing).toLocaleString()} <span>(${(
+  document.querySelector(
+    '.stats__value--missing'
+  ).innerHTML = `${(+profile.missing).toLocaleString()} <span>(${(
     (profile.missing /
       (profile.counts.reduce((a, c) => a + c, 0) + profile.missing)) *
     100
   ).toFixed(2)}%)</span>`;
-  categoriesCountStat.innerText = profile.categories.length.toLocaleString();
+  document.querySelector('.stats__value--categories').innerText =
+    profile.categories.length.toLocaleString();
 
   const maxIndex = profile.counts.indexOf(Math.max(...profile.counts));
   const minIndex = profile.counts.indexOf(Math.min(...profile.counts));
 
-  mostFrequentStat.innerHTML = `${
+  document.querySelector('.stats__value--most').innerHTML = `${
     profile.categories[maxIndex]
   } <span>(${profile.percentages[maxIndex].toFixed(2)}%)</span>`;
-  leastFrequentStat.innerHTML = `${
+  document.querySelector('.stats__value--least').innerHTML = `${
     profile.categories[minIndex]
   } <span>(${profile.percentages[minIndex].toFixed(2)}%)</span>`;
 }
@@ -1422,6 +1416,12 @@ function handleToggleView() {
               </div>
               <div class="options">
                 <button
+                  class="btn btn--icon btn--copy"
+                  title="copy"
+                >
+                  {% include './img/copy.svg' %}
+                </button>
+                <button
                   class="btn btn--icon btn--percentage"
                   title="percentage"
                 >
@@ -1461,6 +1461,9 @@ function handleToggleView() {
     document
       .querySelectorAll('.btn--attribute')
       .forEach((btn, i) => handleAttributesBtns(btn, i));
+
+    const copyBtn = document.querySelector('.btn--copy');
+    copyBtn.addEventListener('click', () => copyChartToClipboard(copyBtn));
 
     const correlationsPrintContainer = document.querySelector(
       '.correlations--print'
