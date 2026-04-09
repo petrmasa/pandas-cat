@@ -1,4 +1,6 @@
 import base64
+import copy
+import re
 from io import BytesIO
 
 import pandas
@@ -8,12 +10,12 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-from pandas.core.dtypes.common import is_categorical_dtype
 
 from jinja2 import Environment, FileSystemLoader
 
 from cleverminer import cleverminer
 import scipy.stats as ss
+from pandas.api.types import CategoricalDtype
 
 
 class pandas_cat:
@@ -21,8 +23,8 @@ class pandas_cat:
     Pandas categorical profiling. Creates html report with profile of categorical dataset. Provides also other useful functions.
     """
 
-    version_string = "0.1.1"
-    template_name = "default_0_1_0.tem"
+    version_string = "0.1.4"
+    template_name = "default_0_1_3.tem"
 
     def __init__(self):
         """
@@ -30,23 +32,55 @@ class pandas_cat:
 
         """
     @staticmethod
-    def profile(df: pandas.DataFrame = None, dataset_name: str = None, template: str = None, opts: dict = None):
+    def profile(df: pandas.DataFrame = None, dataset_name: str = None, template: str = None, out_html: str ="report.html" , opts: dict = None):
         """
-        Profiles a categorical dataset.
+        Profile a categorical dataset and write an HTML report.
 
-        :param df: pandas dataframe to profile
-        :param dataset_name: dataset name
-        :param template: 'default' or 'interactive' template for the final report
-        :param opts: options
+        The report is written to ``<cwd>/report/<out_html>``.  The directory is
+        created automatically if it does not exist.
 
-        Options inlude:
-            * **auto_prepare** - set whether to apply automatic dataframe preparation (default = True)
-            * **cat_limit** - limit number of categories to profile (default=20)
-            * **na_values** - array of additional custom values that should be detected as missing
-            * **na_ignore** - array of values (from default list) that should not be detected as missings
-            * **keep_default_na** - boolean to completely override the default missing values list
+        :param df: DataFrame to profile.
+        :param dataset_name: Title shown in the report header.
+        :param template: Report template to use.  Accepted values:
+
+            * ``None`` or ``'default'`` — static HTML with embedded SVG charts
+              and Cramer's V heatmaps.
+            * ``'interactive'`` — interactive report with multiple correlation
+              metrics.
+
+        :param out_html: Output filename (basename only, no path).  The file is
+            written under ``report/``.  Defaults to ``'report.html'``.
+        :param opts: Optional dictionary of settings:
+
+            * **auto_prepare** (*bool*, default ``True``) — tries to automatically
+              order all ordinal variables.
+            * **cat_limit** (*int*, default ``20``) — maximum categories
+              for variable to be included in the report.
+            * **na_values** (*list*) — additional strings to treat as missing
+              on top of the built-in list.
+            * **na_ignore** (*list*) — strings from the built-in missing-value
+              list that should *not* be treated as a missing value.
+            * **keep_default_na** (*bool*, default ``True``) — whether to use
+              the built-in list on the top of na_values (default is True).
+
+        :returns: ``None``.  The report is written to disk.
         """
         self = pandas_cat
+
+        my_df = df
+        auto_prepare = True #default
+
+        if opts is not None:
+            if "auto_prepare" in opts:
+                if opts.get("auto_prepare") == False or opts.get("auto_prepare") == 0:
+                    auto_prepare = False
+
+        if auto_prepare:
+            print("Will auto prepare data...")
+            my_df = self.prepare(df=my_df, opts=opts)
+            print("... auto prepare data done.")
+            df = my_df
+
 
         # GENERATE INTERACTIVE REPORT
         if template == 'interactive':
@@ -69,8 +103,12 @@ class pandas_cat:
 
             # Iterate over each column in df
             for column in df.columns:
-                # Count categories
-                categories_counts = df[column].value_counts()
+                # Count categories, respecting ordered categorical order
+                if hasattr(df[column], 'cat') and df[column].cat.ordered:
+                    categories_counts = df[column].value_counts().reindex(
+                        df[column].cat.categories, fill_value=0)
+                else:
+                    categories_counts = df[column].value_counts()
                 # If categories count is over the limit remove attribute
                 if len(categories_counts) > options['cat_limit']:
                     removed_attribute_profile = {
@@ -116,17 +154,22 @@ class pandas_cat:
                                      "y": column_two, "v": cramers_v}
                     correlations_data['Cramers V'].append(entry_cramers)
 
-                    # Convert categorical data to numeric codes for Spearman rank correlation
-                    col_one = df[column_one]
-                    col_two = df[column_two]
-                    if col_one.dtype == 'object' or is_categorical_dtype(col_one):
-                        col_one = col_one.astype('category').cat.codes
-                    if col_two.dtype == 'object' or is_categorical_dtype(col_two):
-                        col_two = col_two.astype('category').cat.codes
+                    # Convert categorical types to numeric codes for Spearman's correlation
+                    # cat.codes returns -1 for NA; replace with np.nan then mask.
+                    def _to_float_codes(series):
+                        codes = series.astype('category').cat.codes.to_numpy(dtype=float)
+                        codes[codes == -1] = np.nan
+                        return codes
+
+                    arr_one = _to_float_codes(df[column_one])
+                    arr_two = _to_float_codes(df[column_two])
+                    mask = ~(np.isnan(arr_one) | np.isnan(arr_two))
 
                     # Calculate Spearman rank correlation
-                    spearman_corr, _ = ss.spearmanr(
-                        col_one, col_two, nan_policy='omit')
+                    if mask.sum() < 2:
+                        spearman_corr = 0.0
+                    else:
+                        spearman_corr, _ = ss.spearmanr(arr_one[mask], arr_two[mask])
                     spearman_corr = round(float(spearman_corr), 3)
                     entry_spearman = {"x": column_one,
                                       "y": column_two, "v": spearman_corr}
@@ -184,13 +227,9 @@ class pandas_cat:
             report_dir = os.path.join(os.getcwd(), 'report')
             if not os.path.exists(report_dir):
                 os.makedirs(report_dir)
-            filename = os.path.join(report_dir, f'{dataset_name.lower()}.html')
+            filename = os.path.join(report_dir, out_html)
             with open(filename, 'w') as f:
                 f.write(html)
-
-            # Prepare dataset if auto_prepare is on
-            if options['auto_prepare'] is True:
-                df = self.prepare(df)
 
             print(
                 f'Progress 6/6: Report {dataset_name.lower()}.html finished...')
@@ -212,13 +251,6 @@ class pandas_cat:
         my_df, _, _ = self.handle_missing_values(
             df, options['na_values'], options['na_ignore'], options['keep_default_na'])
 
-        if opts is not None:
-            if "auto_prepare" in opts:
-                if opts.get("auto_prepare") == True or opts.get("auto_prepare") == 1:
-                    print("Will auto prepare data...")
-                    my_df = self.prepare(df=my_df, opts=opts)
-                    print("... auto prepare data done.")
-        df = my_df
 
         warning_info = []
 
@@ -270,7 +302,6 @@ class pandas_cat:
 
         env = Environment(loader=FileSystemLoader(
             os.path.dirname(__file__)+'/'+'templates'))
-        html_inner = ""
         indi_variables = []
 
         cntordr = 0
@@ -379,7 +410,7 @@ class pandas_cat:
 
                 is_ordered = False
 
-                if is_categorical_dtype(df[i]):
+                if isinstance(df[i].dtype, pd.CategoricalDtype):
                     if df[i].cat.ordered:
                         is_ordered = True
 
@@ -489,7 +520,7 @@ class pandas_cat:
         print("Preparing individual correlations...done.")
         print("Preparing output file...")
 
-        fname = "report.html"
+        fname = out_html
 
         outdir = os.path.join(os.getcwd(), 'report')
         # Check whether the specified path exists or not
@@ -579,8 +610,10 @@ class pandas_cat:
             data = data.sort_values(by=column)
         grp = data.groupby(column, dropna=False)[column].count()
 
+        x_labels = [str(v) for v in grp.index]
         plt.figure(figsize=(16, 4))
-        a = sns.barplot(x=grp.index, y=grp.values,
+        a = sns.barplot(x=x_labels, y=grp.values,
+                        order=x_labels,
                         color="lightsteelblue", edgecolor="black")
         if rotate:
             plt.xticks(rotation=90)
@@ -615,28 +648,134 @@ class pandas_cat:
         return f"{B:.2f} {power_labels[n]}"
 
     @staticmethod
-    def prepare(df: pandas.DataFrame = None, opts: dict = None):
+    def prepare(df: pandas.DataFrame = None, auto_data_prep='internal', opts: dict = None, ):
         """
-        Prepares a categorical dataset. Takes strings, integers etc. variables and if possible, converts it do
-        pandas categorical and ordered by their natural value
+        Prepare a categorical dataset -- tries to convert ordinal values also in strings
+        to ordinal variable.
 
-        :param df: pandas dataframe to prepare (advance) in pandas categorical
+        E.g. Values 'Under 12', '13-18', '19-25', ... , 'Over 75' are sorted correctly
+        E.g.2 : values like 0,1,2,...,9,10,11,>=12 are also sorted correctly.
 
+        :param df: DataFrame to prepare.
+        :param auto_data_prep: Preparation engine to use.  Currently there
+            are two engines supported - internal one and CleverMiner.
+            Use ``'CLM'`` for CleverMiner and any other value for internal.
+        :param opts: If CLM engine is used, these options are passed
+            to CleverMiner as is.
 
+        :returns: A new DataFrame with eligible columns converted to ordered
+            ``pandas.CategoricalDtype``.  The input DataFrame is not modified.
+
+        :raises: No exceptions are raised; columns that cannot be converted are
+            returned as-is.
+
+        .. note::
+            CleverMiner >= 1.0.7 is required for CLM engine conversion.  If
+            an older version is  installed the original DataFrame is returned unchanged.
         """
-        # currently we are using CleverMiner's data preparation
-        # we plan to create this package independent on CleverMiner package and move these routines from CleverMiner to this package
-
+        #currently we are moving CleverMiner's data preparation to here, internal processing keeping as default
+        #CleverMiner's data preparation is kept for compatibility
+        
         my_df = df
-        opts2 = opts
-        if opts2 is None:
-            opts2 = {}
+        opts2 = opts if opts is not None else {}
+        #prevent changing original df
         opts2['keep_df'] = True
-        clm = cleverminer(df=my_df, opts=opts2)
-        if cleverminer.version_string < '1.0.7':
-            return my_df
-        return clm.df
+        if auto_data_prep=='CLM':
+            print("INFO: Using CleverMiner to prepare dataset")
+            clm = cleverminer(df=my_df, opts=opts2)
+            clm.print_data_definition()
+            if cleverminer.version_string < '1.0.7':
+                return my_df
+            return clm.df
+        else:
+            print("INFO: Using INTERNAL AUTO PREPARATION")
+            pandas_cat._automatic_data_conversions(df)
+            for col in df.select_dtypes(exclude=['category']).columns:
+                df[col] = df[col].apply(str)
+            try:
+                unique_counts = pd.DataFrame.from_records([(col, df[col].nunique()) for col in df.columns],
+                                                          columns=['Column_Name', 'Num_Unique']).sort_values(
+                    by=['Num_Unique'])
+            except:
+                print(
+                    "Error in input data, probably unsupported data type. Will try to scan for column with unsupported type.")
+                colname = ""
+                try:
+                    for col in df.columns:
+                        colname = col
+                        print(f"...column {col} has {int(df[col].nunique())} values")
+                except:
+                    print(f"... detected : column {colname} has unsupported type: {type(df[col])}.")
+                    exit(1)
+                print(
+                    f"Error in data profiling - attribute with unsupported type not detected. Please profile attributes manually, only simple attributes are supported.")
+                exit(1)
+                          
+            s = ""                          
+            for column in df:
+                s = f"Column {column}:"
+                dfc = pd.get_dummies(df[column])
+                for col2 in dfc:
+                    s += f"{col2} "
+                print(s)
 
+            return df
+
+
+    def _automatic_data_conversions(df):
+        print("Automatically reordering numeric categories ...")
+        verbosity = False
+        for i in range(len(df.columns)):
+            if verbosity:
+                print(f"#{i}: {df.columns[i]} : {df.dtypes.iloc[i]}.")
+            try:
+                df[df.columns[i]] = df[df.columns[i]].astype(str).astype(float)
+                if verbosity:
+                    print(f"CONVERTED TO FLOATS #{i}: {df.columns[i]} : {df.dtypes.iloc[i]}.")
+                lst2 = pd.unique(df[df.columns[i]])
+                is_int = True
+                for val in lst2:
+                    if val % 1 != 0:
+                        is_int = False
+                if is_int:
+                    df[df.columns[i]] = df[df.columns[i]].astype(int)
+                    if verbosity:
+                        print(f"CONVERTED TO INT #{i}: {df.columns[i]} : {df.dtypes.iloc[i]}.")
+                lst3 = pd.unique(df[df.columns[i]])
+                cat_type = CategoricalDtype(categories=sorted(lst3), ordered=True)
+                df[df.columns[i]] = df[df.columns[i]].astype(cat_type)
+                if verbosity:
+                    print(f"CONVERTED TO CATEGORY #{i}: {df.columns[i]} : {df.dtypes.iloc[i]}.")
+
+            except:
+                if verbosity:
+                    print("...cannot be converted to int")
+                try:
+                    values = df[df.columns[i]].unique()
+                    if verbosity:
+                        print(f"Values: {values}")
+                    is_ok = True
+                    valid_pairs = []
+                    for val in values:
+                        if pd.isna(val) or str(val).lower() in ('nan', 'na', 'none', ''):
+                            continue
+                        res = re.findall(r"-?\d+", str(val))
+                        if len(res) > 0:
+                            valid_pairs.append((int(res[0]), val))
+                            #extracted.append(int(res[0]))
+                        else:
+                            is_ok = False
+                    if is_ok and valid_pairs:
+                        sorted_list = [v for _, v in sorted(valid_pairs, key=lambda x: x[0])]
+                        cat_type = CategoricalDtype(categories=sorted_list, ordered=True)
+                        df[df.columns[i]] = df[df.columns[i]].astype(cat_type)
+                except:
+                    if verbosity:
+                        print("...cannot extract numbers from all categories")
+
+        print("Automatically reordering numeric categories ...done")
+
+            
     @staticmethod
     def handle_missing_values(df, na_values: list = [], na_ignore: list = [], keep_default_na: bool = True):
         """
@@ -691,6 +830,11 @@ class pandas_cat:
                     0, 'pandas.NAN')
                 replaced_counts[column].insert(0, df[column].isna().sum())
 
-            df[column].replace(missing_values, pd.NA, inplace=True)
+            if hasattr(df[column], 'cat'):
+                to_remove = [v for v in missing_values if v in df[column].cat.categories]
+                if to_remove:
+                    df[column] = df[column].cat.remove_categories(to_remove)
+            else:
+                df[column] = df[column].replace(missing_values, pd.NA)
 
         return df, detected_missing_values, replaced_counts
